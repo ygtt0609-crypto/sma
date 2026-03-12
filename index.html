@@ -6,6 +6,7 @@
 <title>SMA Mühendislik</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -331,7 +332,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 
     <!-- FİŞ / KDV -->
     <div class="page" id="page-kdv">
-      <div class="page-header" style="margin-top:0.5rem;"><div class="page-title">Fiş & KDV</div><div class="page-sub">Gelir / gider fişleri</div></div>
+      <div class="page-header" style="margin-top:0.5rem;display:flex;align-items:flex-start;justify-content:space-between;"><div><div class="page-title">Fiş &amp; KDV</div><div class="page-sub">Gelir / gider fişleri</div></div><button class="btn btn-success btn-sm" onclick="fisExcelIndir()" style="margin-top:0.3rem;flex-shrink:0;">📊 Gider Excel</button></div>
       <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" type="text" placeholder="Açıklama ara..." oninput="searchFisler(this.value)"/></div>
       <div style="display:flex;gap:0.5rem;margin-bottom:0.8rem;">
         <input class="form-input" type="date" id="fis-tarih-bas" style="flex:1;" onchange="renderKdv()"/>
@@ -606,16 +607,30 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       <div><label class="form-label">Tür</label><select class="form-input" id="fis-tip"><option value="gelir">Gelir</option><option value="gider">Gider</option></select></div>
       <div><label class="form-label">Tarih</label><input class="form-input" type="date" id="fis-tarih"/></div>
     </div>
-    <div class="form-group"><label class="form-label">Açıklama</label><input class="form-input" type="text" id="fis-aciklama" placeholder="Açıklama..."/></div>
-    <div class="form-row">
-      <div><label class="form-label">KDV Oranı</label><select class="form-input" id="fis-kdv-oran" onchange="fisKdvHesapla()"><option value="0">%0</option><option value="1">%1</option><option value="10">%10</option><option value="20" selected>%20</option></select></div>
-      <div><label class="form-label">Tutar (KDV Hariç)</label><input class="form-input" type="text" inputmode="decimal" id="fis-tutar" placeholder="0" oninput="fisKdvHesapla()"/></div>
-    </div>
-    <div style="background:rgba(45,109,212,0.1);border:1px solid rgba(45,109,212,0.3);border-radius:10px;padding:0.6rem 0.9rem;margin-bottom:0.9rem;display:flex;justify-content:space-between;align-items:center;">
-      <div style="font-size:0.75rem;color:var(--muted);">KDV: <span id="fis-kdv-goster" style="color:var(--yellow);">₺0</span></div>
-      <div style="font-size:0.85rem;font-weight:700;color:var(--blue2);">Toplam: <span id="fis-toplam-goster">₺0</span></div>
-    </div>
+    <div class="form-group"><label class="form-label">Genel Açıklama</label><input class="form-input" type="text" id="fis-aciklama" placeholder="Açıklama..."/></div>
     <div class="form-group"><label class="form-label">Belge No</label><input class="form-input" type="text" id="fis-belge" placeholder="Opsiyonel..."/></div>
+
+    <!-- KALEMLER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+      <label class="form-label" style="margin-bottom:0;">Kalemler</label>
+      <button class="btn btn-ghost btn-xs" onclick="fisKalemEkle()">＋ Kalem Ekle</button>
+    </div>
+    <div id="fis-kalemler"></div>
+
+    <div style="background:rgba(45,109,212,0.1);border:1px solid rgba(45,109,212,0.3);border-radius:10px;padding:0.6rem 0.9rem;margin-bottom:0.9rem;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:0.25rem;">
+        <span style="font-size:0.75rem;color:var(--muted);">Toplam Matrah:</span>
+        <span id="fis-matrah-goster" style="font-size:0.75rem;color:var(--white);">₺0</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:0.25rem;">
+        <span style="font-size:0.75rem;color:var(--muted);">Toplam KDV:</span>
+        <span id="fis-kdv-goster" style="font-size:0.75rem;color:var(--yellow);">₺0</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:0.85rem;font-weight:700;color:var(--blue2);">Genel Toplam:</span>
+        <span id="fis-toplam-goster" style="font-size:0.85rem;font-weight:700;color:var(--blue2);">₺0</span>
+      </div>
+    </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('fis')">İptal</button><button class="btn btn-primary" onclick="saveFis()">💾 Kaydet</button></div>
   </div>
 </div>
@@ -873,7 +888,12 @@ function openModal(type){
     const vade=new Date();vade.setDate(vade.getDate()+30);
     document.getElementById('f-vade').value=vade.toISOString().split('T')[0];
   }
-  if(type==='fis') document.getElementById('fis-tarih').value=new Date().toISOString().split('T')[0];
+  if(type==='fis'){
+    document.getElementById('fis-tarih').value=new Date().toISOString().split('T')[0];
+    document.getElementById('fis-kalemler').innerHTML='';
+    fisKalemSayac=0;
+    fisKalemEkle(); // ilk kalem otomatik ekle
+  }
   if(type==='calisan-odeme'){
     document.getElementById('co-tarih').value=new Date().toISOString().split('T')[0];
     const coSel=document.getElementById('co-calisan');
@@ -1310,14 +1330,47 @@ function renderCalisanlar(){
 // =====================
 // FİŞ / KDV
 // =====================
-function fisKdvHesapla(){
-  const tutar=parsePara(document.getElementById('fis-tutar').value);
-  const oran=parseInt(document.getElementById('fis-kdv-oran').value)||0;
-  const kdv=parseFloat((tutar*oran/100).toFixed(2));
-  const toplam=parseFloat((tutar+kdv).toFixed(2));
-  document.getElementById('fis-kdv-goster').textContent=formatPara(kdv);
-  document.getElementById('fis-toplam-goster').textContent=formatPara(toplam);
+let fisKalemSayac = 0;
+function fisKalemEkle() {
+  const id = fisKalemSayac++;
+  const div = document.createElement('div');
+  div.id = 'fis-kalem-' + id;
+  div.style.cssText = 'background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;padding:0.7rem;margin-bottom:0.6rem;';
+  div.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;"><span style="font-size:0.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Kalem ${id+1}</span><button class="btn btn-danger btn-xs" onclick="fisKalemSil(${id})" style="padding:0.15rem 0.4rem;">✕</button></div><div style="margin-bottom:0.5rem;"><input class="form-input" type="text" id="fis-kalem-aciklama-${id}" placeholder="Kalem açıklaması..." style="font-size:0.82rem;"/></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;"><div><label class="form-label">KDV Oranı</label><select class="form-input" id="fis-kalem-kdvoran-${id}" onchange="fisToplamHesapla()" style="font-size:0.82rem;"><option value="0">%0</option><option value="1">%1</option><option value="10">%10</option><option value="20" selected>%20</option></select></div><div><label class="form-label">Tutar (KDV Hariç)</label><input class="form-input" type="text" inputmode="decimal" id="fis-kalem-tutar-${id}" placeholder="0" oninput="fisToplamHesapla()" style="font-size:0.82rem;"/></div></div><div style="display:flex;justify-content:flex-end;margin-top:0.4rem;font-size:0.72rem;color:var(--muted);">KDV: <span id="fis-kalem-kdv-${id}" style="color:var(--yellow);margin:0 0.4rem;">₺0</span> | Toplam: <span id="fis-kalem-toplam-${id}" style="color:var(--white);margin-left:0.4rem;">₺0</span></div>`;
+  document.getElementById('fis-kalemler').appendChild(div);
+  fisToplamHesapla();
 }
+function fisKalemSil(id) {
+  const el = document.getElementById('fis-kalem-' + id);
+  if(el) el.remove();
+  fisToplamHesapla();
+}
+function fisToplamHesapla() {
+  let toplamMatrah = 0, toplamKdv = 0;
+  document.querySelectorAll('#fis-kalemler > div').forEach(div => {
+    const idMatch = div.id.match(/fis-kalem-(\d+)/);
+    if(!idMatch) return;
+    const kid = idMatch[1];
+    const tutar = parsePara(document.getElementById('fis-kalem-tutar-' + kid)?.value || '0');
+    const oran = parseInt(document.getElementById('fis-kalem-kdvoran-' + kid)?.value) || 0;
+    const kdv = parseFloat((tutar * oran / 100).toFixed(2));
+    const toplam = parseFloat((tutar + kdv).toFixed(2));
+    const kdvEl = document.getElementById('fis-kalem-kdv-' + kid);
+    const topEl = document.getElementById('fis-kalem-toplam-' + kid);
+    if(kdvEl) kdvEl.textContent = formatPara(kdv);
+    if(topEl) topEl.textContent = formatPara(toplam);
+    toplamMatrah += tutar;
+    toplamKdv += kdv;
+  });
+  const genel = toplamMatrah + toplamKdv;
+  const matrahEl = document.getElementById('fis-matrah-goster');
+  if(matrahEl) matrahEl.textContent = formatPara(toplamMatrah);
+  const kdvEl2 = document.getElementById('fis-kdv-goster');
+  if(kdvEl2) kdvEl2.textContent = formatPara(toplamKdv);
+  const topEl2 = document.getElementById('fis-toplam-goster');
+  if(topEl2) topEl2.textContent = formatPara(genel);
+}
+function fisKdvHesapla(){fisToplamHesapla();}
 function efisKdvHesapla(){
   const tutar=parsePara(document.getElementById('efis-tutar').value);
   const oran=parseInt(document.getElementById('efis-kdv-oran').value)||0;
@@ -1327,18 +1380,38 @@ function efisKdvHesapla(){
   document.getElementById('efis-toplam-goster').textContent=formatPara(toplam);
 }
 async function saveFis(){
-  const tutar=parsePara(document.getElementById('fis-tutar').value);
-  if(!tutar||tutar<=0)return showToast('Geçerli tutar girin!',true);
-  const kdvOran=parseInt(document.getElementById('fis-kdv-oran').value)||0;
-  const kdvTutar=parseFloat((tutar*kdvOran/100).toFixed(2));
-  const toplam=parseFloat((tutar+kdvTutar).toFixed(2));
+  // Kalemleri topla
+  const kalemEls = document.querySelectorAll('#fis-kalemler > div');
+  if(!kalemEls.length) return showToast('En az 1 kalem ekleyin!',true);
+  let toplamMatrah=0, toplamKdv=0;
+  const kalemDetay=[];
+  for(const div of kalemEls){
+    const idMatch=div.id.match(/fis-kalem-(\d+)/);
+    if(!idMatch)continue;
+    const kid=idMatch[1];
+    const t=parsePara(document.getElementById('fis-kalem-tutar-'+kid)?.value||'0');
+    const o=parseInt(document.getElementById('fis-kalem-kdvoran-'+kid)?.value)||0;
+    const k=parseFloat((t*o/100).toFixed(2));
+    const aciklama=document.getElementById('fis-kalem-aciklama-'+kid)?.value||'';
+    toplamMatrah+=t; toplamKdv+=k;
+    kalemDetay.push({aciklama,kdv_oran:o,tutar:t,kdv_tutar:k});
+  }
+  if(toplamMatrah<=0)return showToast('Geçerli tutar girin!',true);
+  const toplam=parseFloat((toplamMatrah+toplamKdv).toFixed(2));
+  // Tek fiş kaydı: toplamları kullan, kalem detaylarını JSON olarak aciklama'ya ekle
+  const aciklamaBase=document.getElementById('fis-aciklama').value;
+  const aciklamaFull=kalemDetay.length>1
+    ? (aciklamaBase||'') + (aciklamaBase?' | ':'') + kalemDetay.map(k=>`${k.aciklama||'Kalem'} (%${k.kdv_oran})`).join(', ')
+    : (aciklamaBase || kalemDetay[0].aciklama || '');
   const id=newId();
-  const ok=await sbEkle('fisler',{id,tip:document.getElementById('fis-tip').value,tarih:document.getElementById('fis-tarih').value,aciklama:document.getElementById('fis-aciklama').value,kdv_oran:kdvOran,tutar,kdv_tutar:kdvTutar,toplam,belge:document.getElementById('fis-belge').value});
+  const ok=await sbEkle('fisler',{id,tip:document.getElementById('fis-tip').value,tarih:document.getElementById('fis-tarih').value,aciklama:aciklamaFull,kdv_oran:kalemDetay.length===1?kalemDetay[0].kdv_oran:0,tutar:toplamMatrah,kdv_tutar:toplamKdv,toplam,belge:document.getElementById('fis-belge').value});
   if(!ok)return;
   closeModal('fis');
-  ['fis-aciklama','fis-tutar','fis-belge'].forEach(i=>document.getElementById(i).value='');
-  document.getElementById('fis-kdv-goster').textContent='₺0';
-  document.getElementById('fis-toplam-goster').textContent='₺0';
+  document.getElementById('fis-aciklama').value='';
+  document.getElementById('fis-belge').value='';
+  document.getElementById('fis-kalemler').innerHTML='';
+  fisKalemSayac=0;
+  fisToplamHesapla();
   await veriYukle(); showToast('✅ Fiş eklendi!'); renderKdv(); updateKdvAyFilter();
 }
 function editFis(id){
@@ -1367,6 +1440,96 @@ async function deleteFis(id){
   if(!confirm('Fiş silinsin mi?'))return;
   await sbSil('fisler',id);
   await veriYukle(); renderKdv(); updateKdvAyFilter(); showToast('🗑️ Silindi');
+}
+
+function fisExcelIndir() {
+  const giderler = fisler.filter(f => f.tip === 'gider');
+  if(!giderler.length) return showToast('Henüz gider fişi yok!', true);
+
+  const wb = XLSX.utils.book_new();
+  const ws = {};
+
+  // Gruplar: %1, %10, %20, %0 sırasıyla yan yana
+  const gruplar = [
+    { oran: 1,  baslik: '%1 KDV Giderler' },
+    { oran: 10, baslik: '%10 KDV Giderler' },
+    { oran: 20, baslik: '%20 KDV Giderler' },
+    { oran: 0,  baslik: '%0 KDV Giderler' },
+  ].filter(g => giderler.some(f => f.kdvOran === g.oran));
+
+  // Her grup 5 sütun kaplar + 1 boşluk sütunu araya
+  const sutunlar = ['Tarih', 'Açıklama', 'Matrah (₺)', 'KDV (₺)', 'Toplam (₺)'];
+  const grupGeni = sutunlar.length;   // 5
+  const bosluk   = 1;                 // gruplar arası boşluk
+
+  // Hücre adresi hesaplayıcı (col: 0-index, row: 0-index)
+  function hucre(col, row) {
+    let c = '';
+    let n = col;
+    do { c = String.fromCharCode(65 + (n % 26)) + c; n = Math.floor(n / 26) - 1; } while(n >= 0);
+    return c + (row + 1);
+  }
+
+  function yaz(col, row, v, tip) {
+    const adr = hucre(col, row);
+    ws[adr] = tip === 'n' ? { t: 'n', v } : { t: 's', v: String(v) };
+  }
+
+  let maxSatir = 0;
+
+  gruplar.forEach((grup, gi) => {
+    const basSutun = gi * (grupGeni + bosluk);
+    const liste = giderler
+      .filter(f => f.kdvOran === grup.oran)
+      .sort((a, b) => (a.tarih || '').localeCompare(b.tarih || ''));
+
+    // Başlık satırı (satır 0)
+    yaz(basSutun, 0, grup.baslik, 's');
+
+    // Sütun başlıkları (satır 1)
+    sutunlar.forEach((s, si) => yaz(basSutun + si, 1, s, 's'));
+
+    // Veri satırları (satır 2'den itibaren)
+    liste.forEach((f, i) => {
+      const row = 2 + i;
+      yaz(basSutun + 0, row, f.tarih ? f.tarih.split('-').reverse().join('.') : '—', 's');
+      yaz(basSutun + 1, row, f.aciklama || '—', 's');
+      yaz(basSutun + 2, row, f.tutar || 0, 'n');
+      yaz(basSutun + 3, row, f.kdvTutar || 0, 'n');
+      yaz(basSutun + 4, row, f.toplam || 0, 'n');
+    });
+
+    // Toplam satırı
+    const topRow = 2 + liste.length;
+    yaz(basSutun + 0, topRow, 'TOPLAM', 's');
+    yaz(basSutun + 1, topRow, '', 's');
+    yaz(basSutun + 2, topRow, liste.reduce((s, f) => s + (f.tutar || 0), 0), 'n');
+    yaz(basSutun + 3, topRow, liste.reduce((s, f) => s + (f.kdvTutar || 0), 0), 'n');
+    yaz(basSutun + 4, topRow, liste.reduce((s, f) => s + (f.toplam || 0), 0), 'n');
+
+    maxSatir = Math.max(maxSatir, topRow + 1);
+  });
+
+  // Toplam sütun sayısını hesapla ve ref ayarla
+  const topSutun = gruplar.length * (grupGeni + bosluk) - bosluk;
+  ws['!ref'] = hucre(0, 0) + ':' + hucre(topSutun - 1, maxSatir - 1);
+
+  // Sütun genişlikleri
+  const colWidths = [];
+  gruplar.forEach((_, gi) => {
+    colWidths.push({ wch: 12 }); // Tarih
+    colWidths.push({ wch: 32 }); // Açıklama
+    colWidths.push({ wch: 14 }); // Matrah
+    colWidths.push({ wch: 12 }); // KDV
+    colWidths.push({ wch: 14 }); // Toplam
+    if(gi < gruplar.length - 1) colWidths.push({ wch: 3 }); // Boşluk
+  });
+  ws['!cols'] = colWidths;
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Gider Fişleri');
+  const bugun = new Date().toISOString().slice(0, 7);
+  XLSX.writeFile(wb, `GiderFisleri_${bugun}.xlsx`);
+  showToast('✅ Excel indirildi!');
 }
 let fisSearch='';
 function searchFisler(v){fisSearch=v.toLowerCase();renderKdv();}
