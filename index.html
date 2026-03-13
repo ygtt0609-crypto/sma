@@ -648,7 +648,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       <div><label class="form-label">Tür</label><select class="form-input" id="fis-tip"><option value="gelir">Gelir</option><option value="gider">Gider</option></select></div>
       <div><label class="form-label">Tarih</label><input class="form-input" type="date" id="fis-tarih"/></div>
     </div>
-    <div class="form-group"><label class="form-label">Genel Açıklama</label><input class="form-input" type="text" id="fis-aciklama" placeholder="Açıklama..."/></div>
     <div class="form-group"><label class="form-label">Belge No</label><input class="form-input" type="text" id="fis-belge" placeholder="Opsiyonel..."/></div>
 
     <!-- KALEMLER -->
@@ -699,7 +698,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       <div><label class="form-label">Tür</label><select class="form-input" id="efis-tip"><option value="gelir">Gelir</option><option value="gider">Gider</option></select></div>
       <div><label class="form-label">Tarih</label><input class="form-input" type="date" id="efis-tarih"/></div>
     </div>
-    <div class="form-group"><label class="form-label">Açıklama</label><input class="form-input" type="text" id="efis-aciklama"/></div>
     <div class="form-row">
       <div><label class="form-label">KDV Oranı</label><select class="form-input" id="efis-kdv-oran" onchange="efisKdvHesapla()"><option value="0">%0</option><option value="1">%1</option><option value="10">%10</option><option value="20">%20</option></select></div>
       <div><label class="form-label">Tutar (KDV Hariç)</label><input class="form-input" type="text" inputmode="decimal" id="efis-tutar" oninput="efisKdvHesapla()"/></div>
@@ -1496,15 +1494,11 @@ async function saveFis(){
   if(toplamMatrah<=0)return showToast('Geçerli tutar girin!',true);
   const toplam=parseFloat((toplamMatrah+toplamKdv).toFixed(2));
   // Tek fiş kaydı: toplamları kullan, kalem detaylarını JSON olarak aciklama'ya ekle
-  const aciklamaBase=document.getElementById('fis-aciklama').value;
-  const aciklamaFull=kalemDetay.length>1
-    ? (aciklamaBase||'') + (aciklamaBase?' | ':'') + kalemDetay.map(k=>`${k.aciklama||'Kalem'} (%${k.kdv_oran})`).join(', ')
-    : (aciklamaBase || kalemDetay[0].aciklama || '');
+  const aciklamaFull=kalemDetay.map(k=>k.aciklama||'').filter(Boolean).join(', ');
   const id=newId();
   const ok=await sbEkle('fisler',{id,tip:document.getElementById('fis-tip').value,tarih:document.getElementById('fis-tarih').value,aciklama:aciklamaFull,kdv_oran:kalemDetay.length===1?kalemDetay[0].kdv_oran:0,tutar:toplamMatrah,kdv_tutar:toplamKdv,toplam,belge:document.getElementById('fis-belge').value});
   if(!ok)return;
   closeModal('fis');
-  document.getElementById('fis-aciklama').value='';
   document.getElementById('fis-belge').value='';
   document.getElementById('fis-kalemler').innerHTML='';
   fisKalemSayac=0;
@@ -1552,10 +1546,10 @@ function fisExcelIndir() {
     { oran: 10, baslik: '%10 KDV Giderler' },
     { oran: 20, baslik: '%20 KDV Giderler' },
     { oran: 0,  baslik: '%0 KDV Giderler' },
-  ].filter(g => giderler.some(f => f.kdvOran === g.oran));
+  ].filter(g => giderler.some(f => parseInt(f.kdvOran) === g.oran));
 
   // Her grup 5 sütun kaplar + 1 boşluk sütunu araya
-  const sutunlar = ['Tarih', 'Açıklama', 'Matrah (₺)', 'KDV (₺)', 'Toplam (₺)'];
+  const sutunlar = ['Tarih', 'Matrah (₺)', 'KDV (₺)', 'Toplam (₺)'];
   const grupGeni = sutunlar.length;   // 5
   const bosluk   = 1;                 // gruplar arası boşluk
 
@@ -1577,7 +1571,7 @@ function fisExcelIndir() {
   gruplar.forEach((grup, gi) => {
     const basSutun = gi * (grupGeni + bosluk);
     const liste = giderler
-      .filter(f => f.kdvOran === grup.oran)
+      .filter(f => parseInt(f.kdvOran) === grup.oran)
       .sort((a, b) => (a.tarih || '').localeCompare(b.tarih || ''));
 
     // Başlık satırı (satır 0)
@@ -1590,19 +1584,17 @@ function fisExcelIndir() {
     liste.forEach((f, i) => {
       const row = 2 + i;
       yaz(basSutun + 0, row, f.tarih ? f.tarih.split('-').reverse().join('.') : '—', 's');
-      yaz(basSutun + 1, row, f.aciklama || '—', 's');
-      yaz(basSutun + 2, row, f.tutar || 0, 'n');
-      yaz(basSutun + 3, row, f.kdvTutar || 0, 'n');
-      yaz(basSutun + 4, row, f.toplam || 0, 'n');
+      yaz(basSutun + 1, row, f.tutar || 0, 'n');
+      yaz(basSutun + 2, row, f.kdvTutar || 0, 'n');
+      yaz(basSutun + 3, row, f.toplam || 0, 'n');
     });
 
     // Toplam satırı
     const topRow = 2 + liste.length;
     yaz(basSutun + 0, topRow, 'TOPLAM', 's');
-    yaz(basSutun + 1, topRow, '', 's');
-    yaz(basSutun + 2, topRow, liste.reduce((s, f) => s + (f.tutar || 0), 0), 'n');
-    yaz(basSutun + 3, topRow, liste.reduce((s, f) => s + (f.kdvTutar || 0), 0), 'n');
-    yaz(basSutun + 4, topRow, liste.reduce((s, f) => s + (f.toplam || 0), 0), 'n');
+    yaz(basSutun + 1, topRow, liste.reduce((s, f) => s + (f.tutar || 0), 0), 'n');
+    yaz(basSutun + 2, topRow, liste.reduce((s, f) => s + (f.kdvTutar || 0), 0), 'n');
+    yaz(basSutun + 3, topRow, liste.reduce((s, f) => s + (f.toplam || 0), 0), 'n');
 
     maxSatir = Math.max(maxSatir, topRow + 1);
   });
@@ -1986,7 +1978,7 @@ function muhasebeExcelIndir() {
   const gidBaslik = [['Tarih','Açıklama','Belge No','KDV %','Matrah (₺)','KDV (₺)','Toplam (₺)']];
   const gidSatirlar = [];
   [1, 10, 20, 0].forEach(oran => {
-    const grup = giderFisler.filter(f=>(f.kdvOran||0)===oran).sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||''));
+    const grup = giderFisler.filter(f=>parseInt(f.kdvOran||0)===oran).sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||''));
     if(!grup.length) return;
     gidSatirlar.push([`— %${oran} KDV —`,'','','','','','']);
     grup.forEach(f => gidSatirlar.push([tarihFmt(f.tarih), f.aciklama||'—', f.belge||'—', oran, para(f.tutar), para(f.kdvTutar), para(f.toplam)]));
