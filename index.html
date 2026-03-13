@@ -1606,11 +1606,10 @@ function fisExcelIndir() {
   // Sütun genişlikleri
   const colWidths = [];
   gruplar.forEach((_, gi) => {
-    colWidths.push({ wch: 12 }); // Tarih
-    colWidths.push({ wch: 32 }); // Açıklama
-    colWidths.push({ wch: 14 }); // Matrah
+    colWidths.push({ wch: 14 }); // Tarih
+    colWidths.push({ wch: 16 }); // Matrah
     colWidths.push({ wch: 12 }); // KDV
-    colWidths.push({ wch: 14 }); // Toplam
+    colWidths.push({ wch: 16 }); // Toplam
     if(gi < gruplar.length - 1) colWidths.push({ wch: 3 }); // Boşluk
   });
   ws['!cols'] = colWidths;
