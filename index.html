@@ -353,13 +353,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 
     <!-- MÜŞTERİLER -->
     <div class="page" id="page-musteriler">
-      <div class="page-header" style="margin-top:0.5rem;"><div class="page-title">Müşteriler</div><div class="page-sub">Müşteri bilgileri</div></div>
+      <div class="page-header" style="margin-top:0.5rem;display:flex;align-items:flex-start;justify-content:space-between;"><div><div class="page-title">Müşteriler</div><div class="page-sub">Müşteri bilgileri</div></div><button class="btn btn-primary btn-sm" onclick="musteriListePdfIndir()" style="margin-top:0.3rem;flex-shrink:0;">📄 PDF</button></div>
       <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" type="text" placeholder="Müşteri ara..." oninput="searchMusteriler(this.value)"/></div>
       <div style="display:flex;gap:0.5rem;margin-bottom:0.8rem;">
         <input class="form-input" type="date" id="musteri-tarih-bas" style="flex:1;" onchange="renderMusteriler()"/>
         <input class="form-input" type="date" id="musteri-tarih-bit" style="flex:1;" onchange="renderMusteriler()"/>
         <button class="btn btn-ghost btn-sm" onclick="musteriTarihSifirla()">✕</button>
-        <button class="btn btn-primary btn-sm" onclick="musteriListePdfIndir()" title="PDF İndir">📄 PDF</button>
       </div>
       <div id="musteri-list"></div>
     </div>
