@@ -1418,15 +1418,16 @@ function fisToplamHesapla() {
     const idMatch = div.id.match(/fis-kalem-(\d+)/);
     if(!idMatch) return;
     const kid = idMatch[1];
-    const tutar = parsePara(document.getElementById('fis-kalem-tutar-' + kid)?.value || '0');
+    const kdvDahil = parsePara(document.getElementById('fis-kalem-tutar-' + kid)?.value || '0');
     const oran = parseInt(document.getElementById('fis-kalem-kdvoran-' + kid)?.value) || 0;
-    const kdv = parseFloat((tutar * oran / 100).toFixed(2));
-    const toplam = parseFloat((tutar + kdv).toFixed(2));
+    // KDV dahil tutardan matrah ve KDV hesapla: matrah = kdvDahil / (1 + oran/100)
+    const matrah = parseFloat((kdvDahil / (1 + oran / 100)).toFixed(2));
+    const kdv = parseFloat((kdvDahil - matrah).toFixed(2));
     const kdvEl = document.getElementById('fis-kalem-kdv-' + kid);
     const topEl = document.getElementById('fis-kalem-toplam-' + kid);
     if(kdvEl) kdvEl.textContent = formatPara(kdv);
-    if(topEl) topEl.textContent = formatPara(toplam);
-    toplamMatrah += tutar;
+    if(topEl) topEl.textContent = formatPara(kdvDahil);
+    toplamMatrah += matrah;
     toplamKdv += kdv;
   });
   const genel = toplamMatrah + toplamKdv;
@@ -1456,9 +1457,10 @@ async function saveFis(){
     const idMatch=div.id.match(/fis-kalem-(\d+)/);
     if(!idMatch)continue;
     const kid=idMatch[1];
-    const t=parsePara(document.getElementById('fis-kalem-tutar-'+kid)?.value||'0');
+    const kdvDahil=parsePara(document.getElementById('fis-kalem-tutar-'+kid)?.value||'0');
     const o=parseInt(document.getElementById('fis-kalem-kdvoran-'+kid)?.value)||0;
-    const k=parseFloat((t*o/100).toFixed(2));
+    const t=parseFloat((kdvDahil/(1+o/100)).toFixed(2));
+    const k=parseFloat((kdvDahil-t).toFixed(2));
     const aciklama=document.getElementById('fis-kalem-aciklama-'+kid)?.value||'';
     toplamMatrah+=t; toplamKdv+=k;
     kalemDetay.push({aciklama,kdv_oran:o,tutar:t,kdv_tutar:k});
