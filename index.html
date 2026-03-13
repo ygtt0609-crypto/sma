@@ -1539,107 +1539,74 @@ async function deleteFis(id){
   await veriYukle(); renderKdv(); updateKdvAyFilter(); showToast('🗑️ Silindi');
 }
 
-function excelStil() {
-  // Ortak stil yardımcıları
-  const sinir = { style: 'thin', color: { rgb: 'CCCCCC' } };
-  const sinirKalin = { style: 'medium', color: { rgb: '2D6DD4' } };
-  function hucreStil(bgRgb, bold, fontRgb, numFmt, border) {
-    return {
-      fill: bgRgb ? { fgColor: { rgb: bgRgb }, patternType: 'solid' } : undefined,
-      font: { bold: !!bold, color: { rgb: fontRgb || '000000' }, sz: 10, name: 'Calibri' },
-      alignment: { horizontal: 'center', vertical: 'center', wrapText: false },
-      border: border || { top: sinir, bottom: sinir, left: sinir, right: sinir },
-      numFmt: numFmt || ''
-    };
-  }
-  return { hucreStil, sinir, sinirKalin };
-}
-
-function stilUygula(ws, satir, sutun, stil) {
-  function colStr(n) { let c='',i=n; do{c=String.fromCharCode(65+(i%26))+c;i=Math.floor(i/26)-1;}while(i>=0); return c; }
-  const adr = colStr(sutun) + (satir + 1);
-  if(ws[adr]) ws[adr].s = stil;
-  else ws[adr] = { t: 's', v: '', s: stil };
-}
 
 function fisExcelIndir() {
   const giderler = fisler.filter(f => f.tip === 'gider');
   if(!giderler.length) return showToast('Henüz gider fişi yok!', true);
 
   const wb = XLSX.utils.book_new();
-  const { hucreStil } = excelStil();
+
+  // Yardımcı fonksiyonlar
+  function tarihFmt(d) { if(!d) return ''; const[y,m,g]=d.split('-'); return `${g}.${m}.${y}`; }
+  function paraSat(n) { return Math.round((n||0)*100)/100; }
 
   const gruplar = [
-    { oran: 1,  baslik: '%1 KDV Giderler',  renk: 'E8F4FD' },
-    { oran: 10, baslik: '%10 KDV Giderler', renk: 'E8FDF4' },
-    { oran: 20, baslik: '%20 KDV Giderler', renk: 'FDF8E8' },
-    { oran: 0,  baslik: '%0 KDV Giderler',  renk: 'F5F5F5' },
+    { oran: 1,  baslik: '>>> %1 KDV GİDERLER <<<' },
+    { oran: 10, baslik: '>>> %10 KDV GİDERLER <<<' },
+    { oran: 20, baslik: '>>> %20 KDV GİDERLER <<<' },
+    { oran: 0,  baslik: '>>> %0 KDV GİDERLER <<<' },
   ].filter(g => giderler.some(f => parseInt(f.kdvOran) === g.oran));
 
-  const sutunlar = ['Tarih', 'Matrah (₺)', 'KDV (₺)', 'Toplam (₺)'];
-  const grupGeni = sutunlar.length;
-  const bosluk = 1;
+  // Tüm veriyi tek sayfaya, gruplar alt alta
+  const satirlar = [];
 
-  function colStr(n) { let c='',i=n; do{c=String.fromCharCode(65+(i%26))+c;i=Math.floor(i/26)-1;}while(i>=0); return c; }
-  function hucreAdr(col, row) { return colStr(col) + (row + 1); }
+  // Sayfa başlığı
+  const bugun2 = new Date().toLocaleDateString('tr-TR');
+  satirlar.push(['SMA MÜHENDİSLİK — GİDER FİŞLERİ', '', '', '', bugun2]);
+  satirlar.push(['']);
 
-  const ws = {};
-  let maxSatir = 0;
-
-  gruplar.forEach((grup, gi) => {
-    const basSutun = gi * (grupGeni + bosluk);
+  gruplar.forEach(grup => {
     const liste = giderler
       .filter(f => parseInt(f.kdvOran) === grup.oran)
-      .sort((a, b) => (a.tarih || '').localeCompare(b.tarih || ''));
+      .sort((a,b) => (a.tarih||'').localeCompare(b.tarih||''));
 
-    // Grup başlığı (satır 0) - koyu mavi
-    const basAdr = hucreAdr(basSutun, 0);
-    ws[basAdr] = { t: 's', v: grup.baslik, s: hucreStil('1A4FA0', true, 'FFFFFF') };
+    // Grup başlığı
+    satirlar.push([grup.baslik, '', '', '']);
+    // Sütun başlıkları
+    satirlar.push(['TARİH', 'MATRAH (₺)', 'KDV (₺)', 'TOPLAM (₺)']);
 
-    // Sütun başlıkları (satır 1) - orta mavi
-    sutunlar.forEach((s, si) => {
-      const adr = hucreAdr(basSutun + si, 1);
-      ws[adr] = { t: 's', v: s, s: hucreStil('2D6DD4', true, 'FFFFFF') };
+    // Veriler
+    liste.forEach(f => {
+      satirlar.push([
+        tarihFmt(f.tarih),
+        paraSat(f.tutar),
+        paraSat(f.kdvTutar),
+        paraSat(f.toplam)
+      ]);
     });
 
-    // Veri satırları
-    liste.forEach((f, i) => {
-      const row = 2 + i;
-      const zebra = i % 2 === 0 ? grup.renk : 'FFFFFF';
-      const numStil = hucreStil(zebra, false, '000000', '#,##0.00');
-      const txtStil = hucreStil(zebra, false, '333333');
-      ws[hucreAdr(basSutun + 0, row)] = { t: 's', v: f.tarih ? f.tarih.split('-').reverse().join('.') : '—', s: txtStil };
-      ws[hucreAdr(basSutun + 1, row)] = { t: 'n', v: f.tutar || 0, s: numStil };
-      ws[hucreAdr(basSutun + 2, row)] = { t: 'n', v: f.kdvTutar || 0, s: numStil };
-      ws[hucreAdr(basSutun + 3, row)] = { t: 'n', v: f.toplam || 0, s: numStil };
-    });
-
-    // Toplam satırı - koyu arka plan
-    const topRow = 2 + liste.length;
-    const topStilTxt = hucreStil('1A4FA0', true, 'FFFFFF');
-    const topStilNum = hucreStil('1A4FA0', true, 'FFFFFF', '#,##0.00');
-    ws[hucreAdr(basSutun + 0, topRow)] = { t: 's', v: 'TOPLAM', s: topStilTxt };
-    ws[hucreAdr(basSutun + 1, topRow)] = { t: 'n', v: liste.reduce((s,f)=>s+(f.tutar||0),0), s: topStilNum };
-    ws[hucreAdr(basSutun + 2, topRow)] = { t: 'n', v: liste.reduce((s,f)=>s+(f.kdvTutar||0),0), s: topStilNum };
-    ws[hucreAdr(basSutun + 3, topRow)] = { t: 'n', v: liste.reduce((s,f)=>s+(f.toplam||0),0), s: topStilNum };
-
-    maxSatir = Math.max(maxSatir, topRow + 1);
+    // Toplam satırı
+    satirlar.push([
+      '--- TOPLAM ---',
+      paraSat(liste.reduce((s,f)=>s+(f.tutar||0),0)),
+      paraSat(liste.reduce((s,f)=>s+(f.kdvTutar||0),0)),
+      paraSat(liste.reduce((s,f)=>s+(f.toplam||0),0))
+    ]);
+    satirlar.push(['']); // Gruplar arası boşluk
+    satirlar.push(['']);
   });
 
-  const topSutun = gruplar.length * (grupGeni + bosluk) - bosluk;
-  ws['!ref'] = hucreAdr(0, 0) + ':' + hucreAdr(topSutun - 1, maxSatir - 1);
+  // Genel toplam
+  satirlar.push(['=== GENEL TOPLAM ===',
+    paraSat(giderler.reduce((s,f)=>s+(f.tutar||0),0)),
+    paraSat(giderler.reduce((s,f)=>s+(f.kdvTutar||0),0)),
+    paraSat(giderler.reduce((s,f)=>s+(f.toplam||0),0))
+  ]);
 
-  const colWidths = [];
-  gruplar.forEach((_, gi) => {
-    colWidths.push({ wch: 14 });
-    colWidths.push({ wch: 16 });
-    colWidths.push({ wch: 14 });
-    colWidths.push({ wch: 16 });
-    if(gi < gruplar.length - 1) colWidths.push({ wch: 3 });
-  });
-  ws['!cols'] = colWidths;
+  const ws = XLSX.utils.aoa_to_sheet(satirlar);
+  ws['!cols'] = [{wch:16}, {wch:18}, {wch:16}, {wch:18}];
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Gider Fişleri');
+  XLSX.utils.book_append_sheet(wb, ws, 'Gider Fisleri');
   const bugun = new Date().toISOString().slice(0, 7);
   XLSX.writeFile(wb, `GiderFisleri_${bugun}.xlsx`);
   showToast('✅ Excel indirildi!');
@@ -1898,248 +1865,156 @@ function muhasebeExcelIndir() {
   const wb = XLSX.utils.book_new();
   const now = new Date();
   const tarihStr = now.toLocaleDateString('tr-TR');
+  const ay = (now.getMonth()+1).toString().padStart(2,'0');
 
-  function para(n) { return parseFloat((n||0).toFixed(2)); }
-  function tarihFmt(d) { if(!d) return '—'; const[y,m,g]=d.split('-'); return `${g}.${m}.${y}`; }
-  function durumFmt(d) { return d==='odendi'?'Ödendi':d==='bekliyor'?'Bekliyor':'Gecikti'; }
+  function p(n) { return Math.round((n||0)*100)/100; }
+  function tf(d) { if(!d) return ''; const[y,m,g]=d.split('-'); return `${g}.${m}.${y}`; }
+  function df(d) { return d==='odendi'?'Odendi':d==='bekliyor'?'Bekliyor':'Gecikti'; }
 
-  // ── 1. SEKME: ÖZET ──
-  const fatToplam   = para(faturalar.reduce((s,f)=>s+f.tutar,0));
-  const fatOdendi   = para(faturalar.filter(f=>f.durum==='odendi').reduce((s,f)=>s+f.tutar,0));
-  const fatBekliyor = para(faturalar.filter(f=>f.durum==='bekliyor').reduce((s,f)=>s+f.tutar,0));
-  const fatGecikti  = para(faturalar.filter(f=>f.durum==='gecikti').reduce((s,f)=>s+f.tutar,0));
-  const fatKdv      = para(faturalar.filter(f=>f.durum==='odendi').reduce((s,f)=>s+(f.tutar*0.20),0));
-
+  // Hesaplamalar
+  const fatOdendi   = p(faturalar.filter(f=>f.durum==='odendi').reduce((s,f)=>s+f.tutar,0));
+  const fatBekliyor = p(faturalar.filter(f=>f.durum==='bekliyor').reduce((s,f)=>s+f.tutar,0));
+  const fatGecikti  = p(faturalar.filter(f=>f.durum==='gecikti').reduce((s,f)=>s+f.tutar,0));
+  const fatToplam   = p(faturalar.reduce((s,f)=>s+f.tutar,0));
+  const fatKdv      = p(faturalar.filter(f=>f.durum==='odendi').reduce((s,f)=>s+(f.tutar*0.20),0));
   const gelirFisler = fisler.filter(f=>f.tip==='gelir');
   const giderFisler = fisler.filter(f=>f.tip==='gider');
-  const gelirMatrah = para(gelirFisler.reduce((s,f)=>s+(f.tutar||0),0));
-  const gelirKdv    = para(gelirFisler.reduce((s,f)=>s+(f.kdvTutar||0),0));
-  const gelirToplam = para(gelirFisler.reduce((s,f)=>s+(f.toplam||0),0));
-  const giderMatrah = para(giderFisler.reduce((s,f)=>s+(f.tutar||0),0));
-  const giderKdv    = para(giderFisler.reduce((s,f)=>s+(f.kdvTutar||0),0));
-  const giderToplam = para(giderFisler.reduce((s,f)=>s+(f.toplam||0),0));
-  const topHesKdv   = para(fatKdv + gelirKdv);
-  const topIndKdv   = para(giderKdv);
-  const odenecekKdv = para(topHesKdv - topIndKdv);
+  const gelirMatrah = p(gelirFisler.reduce((s,f)=>s+(f.tutar||0),0));
+  const gelirKdv    = p(gelirFisler.reduce((s,f)=>s+(f.kdvTutar||0),0));
+  const gelirToplam = p(gelirFisler.reduce((s,f)=>s+(f.toplam||0),0));
+  const giderMatrah = p(giderFisler.reduce((s,f)=>s+(f.tutar||0),0));
+  const giderKdv    = p(giderFisler.reduce((s,f)=>s+(f.kdvTutar||0),0));
+  const giderToplam = p(giderFisler.reduce((s,f)=>s+(f.toplam||0),0));
+  const topHesKdv   = p(fatKdv + gelirKdv);
+  const topIndKdv   = p(giderKdv);
+  const odenecekKdv = p(topHesKdv - topIndKdv);
+  const calAlacak   = p(calisanOdemeler.filter(o=>o.tur==='alacak').reduce((s,o)=>s+o.tutar,0));
+  const calOdeme    = p(calisanOdemeler.filter(o=>o.tur==='odeme').reduce((s,o)=>s+o.tutar,0));
 
-  const calAlacak = para(calisanOdemeler.filter(o=>o.tur==='alacak').reduce((s,o)=>s+o.tutar,0));
-  const calOdeme  = para(calisanOdemeler.filter(o=>o.tur==='odeme').reduce((s,o)=>s+o.tutar,0));
-
-  const { hucreStil } = excelStil();
-  function stilSatir(ws, satir, col, v, tip, stil) {
-    function cs(n){let c='',i=n;do{c=String.fromCharCode(65+(i%26))+c;i=Math.floor(i/26)-1;}while(i>=0);return c;}
-    const adr = cs(col)+(satir+1);
-    ws[adr] = tip==='n' ? {t:'n',v,s:stil} : {t:'s',v:String(v||''),s:stil};
-  }
-
-  // ÖZET SEKMESİ
-  const ozet = [
-    ['SMA MÜHENDİSLİK — MALİ ÖZET RAPORU', ''],
+  // ── SEKME 1: OZET ──
+  const ws1 = XLSX.utils.aoa_to_sheet([
+    ['SMA MUHENDISLIK - MALI OZET RAPORU', ''],
     ['Rapor Tarihi:', tarihStr],
     ['', ''],
-    ['FATURA TAKİBİ', ''],
+    ['================================', ''],
+    ['FATURA TAKIBI', ''],
+    ['--------------------------------', ''],
     ['Toplam Alacak', fatToplam],
-    ['Tahsil Edilen', fatOdendi],
-    ['Bekleyen', fatBekliyor],
-    ['Gecikmiş', fatGecikti],
-    ['Fatura KDV (%20)', fatKdv],
+    ['  Tahsil Edilen', fatOdendi],
+    ['  Bekleyen', fatBekliyor],
+    ['  Gecikmiş', fatGecikti],
+    ['  Fatura KDV (%20)', fatKdv],
     ['', ''],
     ['GELİR FİŞLERİ', ''],
-    ['Gelir Matrah (KDV Hariç)', gelirMatrah],
-    ['Gelir KDV', gelirKdv],
-    ['Gelir Toplam (KDV Dahil)', gelirToplam],
+    ['--------------------------------', ''],
+    ['  Gelir Matrah (KDV Haric)', gelirMatrah],
+    ['  Gelir KDV', gelirKdv],
+    ['  Gelir Toplam (KDV Dahil)', gelirToplam],
     ['', ''],
     ['GİDER FİŞLERİ', ''],
-    ['Gider Matrah (KDV Hariç)', giderMatrah],
-    ['İndirilecek KDV', giderKdv],
-    ['Gider Toplam (KDV Dahil)', giderToplam],
+    ['--------------------------------', ''],
+    ['  Gider Matrah (KDV Haric)', giderMatrah],
+    ['  Indirilebilecek KDV', giderKdv],
+    ['  Gider Toplam (KDV Dahil)', giderToplam],
     ['', ''],
     ['KDV HESABI', ''],
-    ['Toplam Hesaplanan KDV', topHesKdv],
-    ['Toplam İndirilecek KDV', topIndKdv],
-    [odenecekKdv >= 0 ? 'Ödenecek KDV' : 'KDV İadesi', Math.abs(odenecekKdv)],
+    ['--------------------------------', ''],
+    ['  Hesaplanan KDV', topHesKdv],
+    ['  Indirilecek KDV', topIndKdv],
+    [odenecekKdv >= 0 ? '>>> ODENECEK KDV <<<' : '>>> KDV İADESİ <<<', Math.abs(odenecekKdv)],
     ['', ''],
-    ['ÇALIŞANLAR', ''],
-    ['Toplam Çalışan Alacağı', calAlacak],
-    ['Toplam Çalışan Ödemesi', calOdeme],
-    ['Net Çalışan Bakiyesi', para(calAlacak - calOdeme)],
-  ];
-  const ws1 = XLSX.utils.aoa_to_sheet(ozet);
-  // Başlık stilleri
-  const baslikSatirlar = [0, 3, 10, 15, 20, 25];
-  ozet.forEach((satir, i) => {
-    const isBaslik = baslikSatirlar.includes(i);
-    const isTopBas = i === 0;
-    const etiketStil = hucreStil(isTopBas?'1A4FA0':isBaslik?'2D6DD4':'F8F9FA', isBaslik||isTopBas, isBaslik||isTopBas?'FFFFFF':'333333');
-    const degerStil = hucreStil(isTopBas?'1A4FA0':isBaslik?'2D6DD4':'FFFFFF', isBaslik, isBaslik?'FFFFFF':'1A4FA0', '#,##0.00');
-    stilSatir(ws1, i, 0, satir[0], 's', etiketStil);
-    if(satir[1]!=='' && satir[1]!==undefined) stilSatir(ws1, i, 1, satir[1], typeof satir[1]==='number'?'n':'s', degerStil);
-  });
-  ws1['!cols'] = [{wch:38},{wch:18}];
-  ws1['!rows'] = ozet.map(()=>({hpt:20}));
-  XLSX.utils.book_append_sheet(wb, ws1, '📊 Özet');
-
-  // ── 2. SEKME: FATURALAR ──
-  const fatBaslik = [['Müşteri','Hizmet Türü','Matrah (₺)','KDV %','KDV (₺)','Toplam (₺)','Fatura Tarihi','Vade Tarihi','Durum','Not']];
-  const fatSatir = faturalar
-    .sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||''))
-    .map(f=>[
-      f.musteriAd||'—',
-      f.hizmet||'—',
-      para(f.tutar),
-      20,
-      para(f.tutar*0.20),
-      para(f.tutar*1.20),
-      tarihFmt(f.tarih),
-      tarihFmt(f.vade),
-      durumFmt(f.durum),
-      f.not||''
-    ]);
-  // Alt toplam
-  fatSatir.push([]);
-  fatSatir.push(['TOPLAM','',
-    para(faturalar.reduce((s,f)=>s+f.tutar,0)),'',
-    para(faturalar.reduce((s,f)=>s+(f.tutar*0.20),0)),
-    para(faturalar.reduce((s,f)=>s+(f.tutar*1.20),0)),
-    '','','',''
+    ['CALISANLAR', ''],
+    ['--------------------------------', ''],
+    ['  Calisan Alacagi', calAlacak],
+    ['  Calisan Odemesi', calOdeme],
+    ['  Net Calisan Bakiyesi', p(calAlacak - calOdeme)],
+    ['================================', ''],
   ]);
-  const ws2 = XLSX.utils.aoa_to_sheet([...fatBaslik, ...fatSatir]);
-  // Faturalar stil
-  const fatTumSatir = [...fatBaslik, ...fatSatir];
-  function cs2(n){let c='',i=n;do{c=String.fromCharCode(65+(i%26))+c;i=Math.floor(i/26)-1;}while(i>=0);return c;}
-  fatTumSatir.forEach((satir, ri) => {
-    satir.forEach((_, ci) => {
-      const adr = cs2(ci)+(ri+1);
-      if(!ws2[adr]) return;
-      const isDurumCol = ci === 8;
-      const durum = isDurumCol ? String(ws2[adr].v||'') : '';
-      const durumRenk = durum==='Ödendi'?'D4F7E7':durum==='Gecikti'?'FFE0E0':'FFF9E0';
-      const isBaslik = ri === 0;
-      const isToplam = ri === fatTumSatir.length - 1;
-      const isAra = satir.length === 0 || (satir[0]==='' && satir.every(x=>x===''));
-      const zebra = ri % 2 === 0 ? 'F0F4FF' : 'FFFFFF';
-      const bg = isBaslik?'1A4FA0':isToplam?'2D6DD4':isDurumCol?durumRenk:zebra;
-      const bold = isBaslik||isToplam;
-      const fc = isBaslik||isToplam?'FFFFFF':'333333';
-      const numFmt = (ci>=2&&ci<=5)?'#,##0.00':'';
-      ws2[adr].s = hucreStil(bg, bold, fc, numFmt);
-    });
-  });
-  ws2['!cols'] = [{wch:28},{wch:35},{wch:14},{wch:8},{wch:12},{wch:14},{wch:14},{wch:14},{wch:12},{wch:20}];
-  ws2['!rows'] = fatTumSatir.map(()=>({hpt:20}));
-  XLSX.utils.book_append_sheet(wb, ws2, '🧾 Faturalar');
+  ws1['!cols'] = [{wch:40}, {wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Ozet');
 
-  // ── 3. SEKME: GELİR FİŞLERİ ──
-  const gelBaslik = [['Tarih','Açıklama','Belge No','KDV %','Matrah (₺)','KDV (₺)','Toplam (₺)']];
-  const gelSatir = gelirFisler
-    .sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||''))
-    .map(f=>[tarihFmt(f.tarih), f.aciklama||'—', f.belge||'—', f.kdvOran||0, para(f.tutar), para(f.kdvTutar), para(f.toplam)]);
-  gelSatir.push([]);
-  gelSatir.push(['TOPLAM','','','', gelirMatrah, gelirKdv, gelirToplam]);
-  const ws3 = XLSX.utils.aoa_to_sheet([...gelBaslik, ...gelSatir]);
-  const gelTum = [...gelBaslik, ...gelSatir];
-  function cs3(n){let c='',i=n;do{c=String.fromCharCode(65+(i%26))+c;i=Math.floor(i/26)-1;}while(i>=0);return c;}
-  gelTum.forEach((satir, ri) => {
-    satir.forEach((_, ci) => {
-      const adr = cs3(ci)+(ri+1);
-      if(!ws3[adr]) return;
-      const isBaslik = ri === 0;
-      const isToplam = ri === gelTum.length - 1;
-      const zebra = ri % 2 === 0 ? 'E8F4FD' : 'FFFFFF';
-      const bg = isBaslik?'1A4FA0':isToplam?'2D6DD4':zebra;
-      const bold = isBaslik||isToplam;
-      const fc = isBaslik||isToplam?'FFFFFF':'333333';
-      const numFmt = ci>=4?'#,##0.00':'';
-      ws3[adr].s = hucreStil(bg, bold, fc, numFmt);
-    });
-  });
-  ws3['!cols'] = [{wch:13},{wch:38},{wch:14},{wch:8},{wch:14},{wch:12},{wch:14}];
-  ws3['!rows'] = gelTum.map(()=>({hpt:20}));
-  XLSX.utils.book_append_sheet(wb, ws3, '📥 Gelir Fişleri');
+  // ── SEKME 2: FATURALAR ──
+  const fatVeri = [
+    ['MÜŞTERİ', 'HİZMET', 'MATRAH (TL)', 'KDV%', 'KDV (TL)', 'TOPLAM (TL)', 'FATURA TARİHİ', 'VADE TARİHİ', 'DURUM', 'NOT'],
+    ...faturalar.sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||'')).map(f=>[
+      f.musteriAd||'',
+      f.hizmet||'',
+      p(f.tutar),
+      20,
+      p(f.tutar*0.20),
+      p(f.tutar*1.20),
+      tf(f.tarih),
+      tf(f.vade),
+      df(f.durum),
+      f.not||''
+    ]),
+    [''],
+    ['--- TOPLAM ---', '',
+      p(faturalar.reduce((s,f)=>s+f.tutar,0)), '',
+      p(faturalar.reduce((s,f)=>s+(f.tutar*0.20),0)),
+      p(faturalar.reduce((s,f)=>s+(f.tutar*1.20),0)),
+      '', '', '', ''
+    ]
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(fatVeri);
+  ws2['!cols'] = [{wch:30},{wch:35},{wch:14},{wch:7},{wch:13},{wch:15},{wch:15},{wch:15},{wch:12},{wch:22}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Faturalar');
 
-  // ── 4. SEKME: GİDER FİŞLERİ (KDV ORANLARINA GÖRE GRUPLU) ──
-  const gidBaslik = [['Tarih','Açıklama','Belge No','KDV %','Matrah (₺)','KDV (₺)','Toplam (₺)']];
-  const gidSatirlar = [];
+  // ── SEKME 3: GELİR FİŞLERİ ──
+  const gelVeri = [
+    ['TARİH', 'BELGE NO', 'KDV%', 'MATRAH (TL)', 'KDV (TL)', 'TOPLAM (TL)'],
+    ...gelirFisler.sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||'')).map(f=>[
+      tf(f.tarih), f.belge||'', f.kdvOran||0, p(f.tutar), p(f.kdvTutar), p(f.toplam)
+    ]),
+    [''],
+    ['--- TOPLAM ---', '', '', gelirMatrah, gelirKdv, gelirToplam]
+  ];
+  const ws3 = XLSX.utils.aoa_to_sheet(gelVeri);
+  ws3['!cols'] = [{wch:14},{wch:16},{wch:7},{wch:16},{wch:14},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws3, 'Gelir Fisleri');
+
+  // ── SEKME 4: GİDER FİŞLERİ ──
+  const gidVeri = [['TARİH', 'BELGE NO', 'KDV%', 'MATRAH (TL)', 'KDV (TL)', 'TOPLAM (TL)']];
   [1, 10, 20, 0].forEach(oran => {
     const grup = giderFisler.filter(f=>parseInt(f.kdvOran||0)===oran).sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||''));
     if(!grup.length) return;
-    gidSatirlar.push([`— %${oran} KDV —`,'','','','','','']);
-    grup.forEach(f => gidSatirlar.push([tarihFmt(f.tarih), f.aciklama||'—', f.belge||'—', oran, para(f.tutar), para(f.kdvTutar), para(f.toplam)]));
-    gidSatirlar.push(['Ara Toplam','','','',
-      para(grup.reduce((s,f)=>s+(f.tutar||0),0)),
-      para(grup.reduce((s,f)=>s+(f.kdvTutar||0),0)),
-      para(grup.reduce((s,f)=>s+(f.toplam||0),0))
+    gidVeri.push(['']);
+    gidVeri.push([`>>> %${oran} KDV GIDERLER <<<`, '', '', '', '', '']);
+    gidVeri.push(['- - - - - - - - - - - - - -', '', '', '', '', '']);
+    grup.forEach(f => gidVeri.push([tf(f.tarih), f.belge||'', oran, p(f.tutar), p(f.kdvTutar), p(f.toplam)]));
+    gidVeri.push(['--- ARA TOPLAM ---', '', '',
+      p(grup.reduce((s,f)=>s+(f.tutar||0),0)),
+      p(grup.reduce((s,f)=>s+(f.kdvTutar||0),0)),
+      p(grup.reduce((s,f)=>s+(f.toplam||0),0))
     ]);
-    gidSatirlar.push([]);
   });
-  gidSatirlar.push(['GENEL TOPLAM','','','', giderMatrah, giderKdv, giderToplam]);
-  const ws4 = XLSX.utils.aoa_to_sheet([...gidBaslik, ...gidSatirlar]);
-  const gidTum = [...gidBaslik, ...gidSatirlar];
-  function cs4(n){let c='',i=n;do{c=String.fromCharCode(65+(i%26))+c;i=Math.floor(i/26)-1;}while(i>=0);return c;}
-  let zebraIdx = 0;
-  gidTum.forEach((satir, ri) => {
-    const isBaslik = ri === 0;
-    const isGrupBaslik = !isBaslik && typeof satir[0]==='string' && satir[0].startsWith('—');
-    const isAraToplam = typeof satir[0]==='string' && satir[0]==='Ara Toplam';
-    const isGenelToplam = typeof satir[0]==='string' && satir[0]==='GENEL TOPLAM';
-    const isAra = satir.every(x=>x===''||x===undefined);
-    if(!isAra && !isGrupBaslik && !isBaslik && !isAraToplam && !isGenelToplam) zebraIdx++;
-    satir.forEach((_, ci) => {
-      const adr = cs4(ci)+(ri+1);
-      if(!ws4[adr]) return;
-      const zebra = zebraIdx % 2 === 0 ? 'FDF8E8' : 'FFFFFF';
-      const bg = isBaslik?'1A4FA0':isGrupBaslik?'4D8DF4':isAraToplam?'2D6DD4':isGenelToplam?'1A4FA0':zebra;
-      const bold = isBaslik||isGrupBaslik||isAraToplam||isGenelToplam;
-      const fc = (isBaslik||isGrupBaslik||isAraToplam||isGenelToplam)?'FFFFFF':'333333';
-      const numFmt = ci>=4?'#,##0.00':'';
-      ws4[adr].s = hucreStil(bg, bold, fc, numFmt);
-    });
-  });
-  ws4['!cols'] = [{wch:13},{wch:38},{wch:14},{wch:8},{wch:14},{wch:12},{wch:14}];
-  ws4['!rows'] = gidTum.map(()=>({hpt:20}));
-  XLSX.utils.book_append_sheet(wb, ws4, '📤 Gider Fişleri');
+  gidVeri.push(['']);
+  gidVeri.push(['=== GENEL TOPLAM ===', '', '', giderMatrah, giderKdv, giderToplam]);
+  const ws4 = XLSX.utils.aoa_to_sheet(gidVeri);
+  ws4['!cols'] = [{wch:14},{wch:16},{wch:7},{wch:16},{wch:14},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws4, 'Gider Fisleri');
 
-  // ── 5. SEKME: ÇALIŞANLAR ──
-  const calBaslik = [['Çalışan','İşlem Türü','Tarih','Tutar (₺)','Yöntem','Faturalı','KDV (₺)','Fatura No','Açıklama','Durum']];
-  const calSatir = calisanOdemeler
-    .sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||''))
-    .map(o=>[
-      o.calisanAd||'—',
-      o.tur==='alacak'?'Alacak':'Ödeme',
-      tarihFmt(o.tarih),
-      para(o.tutar),
+  // ── SEKME 5: ÇALIŞANLAR ──
+  const calVeri = [
+    ['CALISAN', 'ISLEM TURU', 'TARİH', 'TUTAR (TL)', 'YONTEM', 'FATURALI', 'KDV (TL)', 'FATURA NO', 'ACIKLAMA'],
+    ...calisanOdemeler.sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||'')).map(o=>[
+      o.calisanAd||'',
+      o.tur==='alacak'?'Alacak':'Odeme',
+      tf(o.tarih),
+      p(o.tutar),
       o.yontem==='nakit'?'Nakit':'Havale',
-      o.faturali?'Evet':'Hayır',
-      para(o.kdv||0),
-      o.faturaNo||'—',
-      o.aciklama||'—',
-      o.tur==='alacak'?(o.odendi?'Tahsil Edildi':'Bekliyor'):'Ödendi'
-    ]);
-  calSatir.push([]);
-  calSatir.push(['TOPLAM ALACAK','','',calAlacak,'','','','','','']);
-  calSatir.push(['TOPLAM ÖDEME','','',calOdeme,'','','','','','']);
-  const calTum = [...calBaslik, ...calSatir];
-  const ws5 = XLSX.utils.aoa_to_sheet(calTum);
-  function cs5(n){let c='',i=n;do{c=String.fromCharCode(65+(i%26))+c;i=Math.floor(i/26)-1;}while(i>=0);return c;}
-  calTum.forEach((satir, ri) => {
-    satir.forEach((_, ci) => {
-      const adr = cs5(ci)+(ri+1);
-      if(!ws5[adr]) return;
-      const isBaslik = ri === 0;
-      const isToplam = ri === calTum.length - 1;
-      const zebra = ri % 2 === 0 ? 'F0F4FF' : 'FFFFFF';
-      const bg = isBaslik?'1A4FA0':isToplam?'2D6DD4':zebra;
-      const bold = isBaslik||isToplam;
-      const fc = isBaslik||isToplam?'FFFFFF':'333333';
-      const numFmt = ci===3||ci===6?'#,##0.00':'';
-      ws5[adr].s = hucreStil(bg, bold, fc, numFmt);
-    });
-  });
-  ws5['!cols'] = [{wch:18},{wch:12},{wch:13},{wch:13},{wch:10},{wch:10},{wch:11},{wch:14},{wch:28},{wch:16}];
-  XLSX.utils.book_append_sheet(wb, ws5, '🤝 Çalışanlar');
+      o.faturali?'Evet':'Hayir',
+      p(o.kdv||0),
+      o.faturaNo||'',
+      o.aciklama||''
+    ]),
+    [''],
+    ['--- TOPLAM ---', '', '', p(calAlacak), '', '', '', '', '']
+  ];
+  const ws5 = XLSX.utils.aoa_to_sheet(calVeri);
+  ws5['!cols'] = [{wch:18},{wch:12},{wch:13},{wch:14},{wch:10},{wch:10},{wch:12},{wch:14},{wch:25}];
+  XLSX.utils.book_append_sheet(wb, ws5, 'Calisanlar');
 
-  // Dosya adı
-  const ay = (now.getMonth()+1).toString().padStart(2,'0');
   XLSX.writeFile(wb, `SMA_Muhasebe_${now.getFullYear()}_${ay}.xlsx`);
   showToast('✅ Muhasebe Excel indirildi!');
 }
