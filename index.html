@@ -359,6 +359,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
         <input class="form-input" type="date" id="musteri-tarih-bas" style="flex:1;" onchange="renderMusteriler()"/>
         <input class="form-input" type="date" id="musteri-tarih-bit" style="flex:1;" onchange="renderMusteriler()"/>
         <button class="btn btn-ghost btn-sm" onclick="musteriTarihSifirla()">✕</button>
+        <button class="btn btn-primary btn-sm" onclick="musteriListePdfIndir()" title="PDF İndir">📄 PDF</button>
       </div>
       <div id="musteri-list"></div>
     </div>
@@ -1025,6 +1026,145 @@ function searchMusteriler(v){musteriSearch=v.toLowerCase();renderMusteriler();}
 // =====================
 // MÜŞTERİ PDF
 // =====================
+function musteriListePdfIndir() {
+  // Ekranda görünen filtrelenmiş listeyi al
+  let list = [...musteriler];
+  if(musteriSearch) list = list.filter(m=>(m.ad||'').toLowerCase().includes(musteriSearch)||(m.tel||'').includes(musteriSearch));
+  const bas = document.getElementById('musteri-tarih-bas')?.value;
+  const bit = document.getElementById('musteri-tarih-bit')?.value;
+  if(bas||bit) {
+    list = list.filter(m=>{
+      const mf = faturalar.filter(f=>f.musteriId==m.id);
+      return mf.some(f=>(!bas||f.tarih>=bas)&&(!bit||f.tarih<=bit));
+    });
+  }
+  if(!list.length) return showToast('Listelenecek müşteri yok!', true);
+
+  function tf(d){if(!d)return '—';const[y,mo,g]=d.split('-');return `${g}.${mo}.${y}`;}
+  function fp(n){return (n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₺';}
+  function durumBadge(d){
+    if(d==='odendi')   return `<span style="background:#e6f9f0;color:#1a7a4a;padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;">Ödendi</span>`;
+    if(d==='bekliyor') return `<span style="background:#fff8e6;color:#996600;padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;">Bekliyor</span>`;
+    return `<span style="background:#ffe6e6;color:#990000;padding:1px 7px;border-radius:5px;font-size:10px;font-weight:700;">Gecikti</span>`;
+  }
+
+  const donemStr = bas && bit ? `${tf(bas)} — ${tf(bit)}` : bas ? `${tf(bas)} sonrası` : bit ? `${tf(bit)} öncesi` : 'Tüm Dönem';
+
+  const musteriBloklar = list.map(m => {
+    const tumFat = faturalar.filter(f=>f.musteriId==m.id).sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||''));
+    // Filtreye uyan faturalar
+    const mf = (bas||bit) ? tumFat.filter(f=>(!bas||f.tarih>=bas)&&(!bit||f.tarih<=bit)) : tumFat;
+    const odenen   = mf.filter(f=>f.durum==='odendi').reduce((s,f)=>s+f.tutar,0);
+    const bekliyor = mf.filter(f=>f.durum==='bekliyor').reduce((s,f)=>s+f.tutar,0);
+    const gecikti  = mf.filter(f=>f.durum==='gecikti').reduce((s,f)=>s+f.tutar,0);
+    const toplam   = mf.reduce((s,f)=>s+f.tutar,0);
+
+    const fatSatirlar = mf.map((f,i)=>`
+      <tr style="background:${i%2===0?'#f8faff':'#fff'};">
+        <td style="padding:6px 8px;border-bottom:1px solid #e8edf4;font-size:11px;color:#555;">${tf(f.tarih)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e8edf4;font-size:11px;color:#333;">${f.hizmet||'—'}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e8edf4;font-size:11px;text-align:right;font-weight:600;">${fp(f.tutar)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e8edf4;font-size:11px;text-align:center;">${durumBadge(f.durum)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e8edf4;font-size:11px;color:#888;">${tf(f.vade)}</td>
+      </tr>`).join('');
+
+    return `
+    <div style="margin-bottom:24px;border:1px solid #dde6f5;border-radius:10px;overflow:hidden;page-break-inside:avoid;">
+      <!-- Müşteri başlık -->
+      <div style="background:#1A4FA0;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="color:#fff;font-size:14px;font-weight:700;">${m.ad}</div>
+          <div style="color:rgba(255,255,255,0.7);font-size:11px;margin-top:2px;">
+            ${m.tip?m.tip+' · ':''}${m.tel?'📞 '+m.tel:''}${m.vergino?' · VN: '+m.vergino:''}
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;text-align:center;">
+          <div><div style="color:#22C97A;font-size:13px;font-weight:700;">${fp(odenen)}</div><div style="color:rgba(255,255,255,0.6);font-size:9px;">Tahsil</div></div>
+          <div><div style="color:#F5A623;font-size:13px;font-weight:700;">${fp(bekliyor)}</div><div style="color:rgba(255,255,255,0.6);font-size:9px;">Bekleyen</div></div>
+          <div><div style="color:#FF5C5C;font-size:13px;font-weight:700;">${fp(gecikti)}</div><div style="color:rgba(255,255,255,0.6);font-size:9px;">Gecikmiş</div></div>
+          <div><div style="color:#fff;font-size:13px;font-weight:700;">${fp(toplam)}</div><div style="color:rgba(255,255,255,0.6);font-size:9px;">Toplam</div></div>
+        </div>
+      </div>
+      <!-- Fatura tablosu -->
+      ${mf.length===0 ? '<div style="padding:12px 16px;color:#aaa;font-size:12px;text-align:center;">Bu dönemde fatura yok</div>' : `
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#EEF2FF;">
+          <th style="padding:7px 8px;font-size:10px;color:#1A4FA0;text-align:left;font-weight:700;">TARİH</th>
+          <th style="padding:7px 8px;font-size:10px;color:#1A4FA0;text-align:left;font-weight:700;">HİZMET</th>
+          <th style="padding:7px 8px;font-size:10px;color:#1A4FA0;text-align:right;font-weight:700;">TUTAR</th>
+          <th style="padding:7px 8px;font-size:10px;color:#1A4FA0;text-align:center;font-weight:700;">DURUM</th>
+          <th style="padding:7px 8px;font-size:10px;color:#1A4FA0;text-align:left;font-weight:700;">VADE</th>
+        </tr></thead>
+        <tbody>${fatSatirlar}</tbody>
+        <tfoot><tr style="background:#EEF2FF;">
+          <td colspan="2" style="padding:8px;font-size:11px;font-weight:700;color:#1A4FA0;">TOPLAM</td>
+          <td style="padding:8px;font-size:12px;font-weight:700;color:#1A4FA0;text-align:right;">${fp(toplam)}</td>
+          <td colspan="2"></td>
+        </tr></tfoot>
+      </table>`}
+    </div>`;
+  }).join('');
+
+  // Genel özet
+  const genelToplam   = list.reduce((s,m)=>{ const mf2=(bas||bit)?faturalar.filter(f=>f.musteriId==m.id&&(!bas||f.tarih>=bas)&&(!bit||f.tarih<=bit)):faturalar.filter(f=>f.musteriId==m.id); return s+mf2.reduce((ss,f)=>ss+f.tutar,0); },0);
+  const genelOdenen   = list.reduce((s,m)=>{ const mf2=(bas||bit)?faturalar.filter(f=>f.musteriId==m.id&&f.durum==='odendi'&&(!bas||f.tarih>=bas)&&(!bit||f.tarih<=bit)):faturalar.filter(f=>f.musteriId==m.id&&f.durum==='odendi'); return s+mf2.reduce((ss,f)=>ss+f.tutar,0); },0);
+  const genelBekliyor = genelToplam - genelOdenen;
+
+  const html = `<!DOCTYPE html>
+<html lang="tr"><head><meta charset="UTF-8"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Arial,sans-serif;background:#fff;color:#222;padding:28px;font-size:12px;}
+  @media print{body{padding:16px;} .no-print{display:none;}}
+</style>
+</head><body>
+  <!-- Başlık -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:16px;border-bottom:3px solid #1A4FA0;">
+    <div>
+      <div style="font-size:20px;font-weight:900;color:#1A4FA0;">SMA MÜHENDİSLİK</div>
+      <div style="font-size:11px;color:#888;margin-top:2px;">Müşteri Hesap Listesi</div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:#888;">
+      <div>Dönem: <strong style="color:#333;">${donemStr}</strong></div>
+      <div style="margin-top:3px;">Tarih: ${new Date().toLocaleDateString('tr-TR')}</div>
+      <div style="margin-top:3px;">Müşteri Sayısı: <strong style="color:#333;">${list.length}</strong></div>
+    </div>
+  </div>
+
+  <!-- Genel Özet -->
+  <div style="display:flex;gap:12px;margin-bottom:20px;">
+    <div style="flex:1;background:#f0f4ff;border:1px solid #dde6f5;border-radius:8px;padding:12px;text-align:center;">
+      <div style="font-size:16px;font-weight:700;color:#1A4FA0;">${list.length}</div>
+      <div style="font-size:10px;color:#888;margin-top:2px;">MÜŞTERİ</div>
+    </div>
+    <div style="flex:1;background:#f0fff8;border:1px solid #c3f0d8;border-radius:8px;padding:12px;text-align:center;">
+      <div style="font-size:16px;font-weight:700;color:#1a7a4a;">${fp(genelOdenen)}</div>
+      <div style="font-size:10px;color:#888;margin-top:2px;">TAHSİL EDİLEN</div>
+    </div>
+    <div style="flex:1;background:#fff8f0;border:1px solid #fde8c3;border-radius:8px;padding:12px;text-align:center;">
+      <div style="font-size:16px;font-weight:700;color:#996600;">${fp(genelBekliyor)}</div>
+      <div style="font-size:10px;color:#888;margin-top:2px;">BEKLEYEN</div>
+    </div>
+    <div style="flex:1;background:#f8faff;border:1px solid #dde6f5;border-radius:8px;padding:12px;text-align:center;">
+      <div style="font-size:16px;font-weight:700;color:#333;">${fp(genelToplam)}</div>
+      <div style="font-size:10px;color:#888;margin-top:2px;">GENEL TOPLAM</div>
+    </div>
+  </div>
+
+  <!-- Müşteri Blokları -->
+  ${musteriBloklar}
+
+  <div style="margin-top:20px;padding-top:12px;border-top:1px solid #e0e8f5;font-size:10px;color:#aaa;text-align:center;">
+    SMA Mühendislik ödeme takip sistemi • ${new Date().toLocaleDateString('tr-TR')}
+  </div>
+</body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(()=>{ win.print(); }, 600);
+}
+
 function musteriPdfIndir(musteriId) {
   const m = musteriler.find(x => x.id == musteriId);
   if(!m) return;
