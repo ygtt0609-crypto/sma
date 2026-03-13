@@ -1494,10 +1494,16 @@ async function saveFis(){
   if(toplamMatrah<=0)return showToast('Geçerli tutar girin!',true);
   const toplam=parseFloat((toplamMatrah+toplamKdv).toFixed(2));
   // Tek fiş kaydı: toplamları kullan, kalem detaylarını JSON olarak aciklama'ya ekle
-  const aciklamaFull=kalemDetay.map(k=>k.aciklama||'').filter(Boolean).join(', ');
-  const id=newId();
-  const ok=await sbEkle('fisler',{id,tip:document.getElementById('fis-tip').value,tarih:document.getElementById('fis-tarih').value,aciklama:aciklamaFull,kdv_oran:kalemDetay.length===1?kalemDetay[0].kdv_oran:0,tutar:toplamMatrah,kdv_tutar:toplamKdv,toplam,belge:document.getElementById('fis-belge').value});
-  if(!ok)return;
+  const fisTip=document.getElementById('fis-tip').value;
+  const fisTarih=document.getElementById('fis-tarih').value;
+  const fisBelge=document.getElementById('fis-belge').value;
+  // Her kalemi ayrı fiş kaydı olarak kaydet
+  for(const k of kalemDetay){
+    const id=newId();
+    const kToplam=parseFloat((k.tutar+k.kdv_tutar).toFixed(2));
+    const ok=await sbEkle('fisler',{id,tip:fisTip,tarih:fisTarih,aciklama:'',kdv_oran:k.kdv_oran,tutar:k.tutar,kdv_tutar:k.kdv_tutar,toplam:kToplam,belge:fisBelge});
+    if(!ok)return;
+  }
   closeModal('fis');
   document.getElementById('fis-belge').value='';
   document.getElementById('fis-kalemler').innerHTML='';
