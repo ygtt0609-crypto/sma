@@ -1022,6 +1022,138 @@ async function saveEditMusteri(){
 }
 function musteriTarihSifirla(){document.getElementById('musteri-tarih-bas').value='';document.getElementById('musteri-tarih-bit').value='';renderMusteriler();}
 function searchMusteriler(v){musteriSearch=v.toLowerCase();renderMusteriler();}
+// =====================
+// MÜŞTERİ PDF
+// =====================
+function musteriPdfIndir(musteriId) {
+  const m = musteriler.find(x => x.id == musteriId);
+  if(!m) return;
+  const mf = faturalar.filter(f => f.musteriId == musteriId)
+    .sort((a,b) => (a.tarih||'').localeCompare(b.tarih||''));
+  
+  const odenen   = mf.filter(f=>f.durum==='odendi').reduce((s,f)=>s+f.tutar, 0);
+  const bekliyor = mf.filter(f=>f.durum==='bekliyor').reduce((s,f)=>s+f.tutar, 0);
+  const gecikti  = mf.filter(f=>f.durum==='gecikti').reduce((s,f)=>s+f.tutar, 0);
+  const toplam   = mf.reduce((s,f)=>s+f.tutar, 0);
+
+  function tf(d) { if(!d) return '—'; const[y,mo,g]=d.split('-'); return `${g}.${mo}.${y}`; }
+  function fp(n) { return (n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₺'; }
+  function durumBadge(d) {
+    if(d==='odendi')   return `<span style="background:#22C97A22;color:#22C97A;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">✓ Ödendi</span>`;
+    if(d==='bekliyor') return `<span style="background:#F5A62322;color:#F5A623;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">⏳ Bekliyor</span>`;
+    return `<span style="background:#FF5C5C22;color:#FF5C5C;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">⚠ Gecikti</span>`;
+  }
+
+  const faturaRows = mf.map((f,i) => `
+    <tr style="background:${i%2===0?'#F8FAFF':'#FFFFFF'};">
+      <td style="padding:8px 10px;border-bottom:1px solid #E8EDF4;font-size:12px;color:#555;">${tf(f.tarih)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #E8EDF4;font-size:12px;color:#333;">${f.hizmet||'—'}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #E8EDF4;font-size:12px;text-align:right;color:#333;">${fp(f.tutar)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #E8EDF4;font-size:12px;text-align:center;">${durumBadge(f.durum)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #E8EDF4;font-size:12px;color:#888;">${tf(f.vade)}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #fff; color: #222; padding: 32px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 3px solid #1A4FA0; }
+  .logo-text { font-size: 22px; font-weight: 900; color: #1A4FA0; letter-spacing: 1px; }
+  .logo-sub { font-size: 11px; color: #888; margin-top: 2px; }
+  .tarih-blok { text-align: right; font-size: 11px; color: #888; }
+  .musteri-blok { background: #F0F4FF; border-left: 4px solid #1A4FA0; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; }
+  .musteri-blok h2 { font-size: 18px; color: #1A4FA0; margin-bottom: 6px; }
+  .musteri-blok p { font-size: 12px; color: #555; margin-top: 3px; }
+  .ozet-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .ozet-kart { background: #F8FAFF; border: 1px solid #E0E8F5; border-radius: 10px; padding: 14px; text-align: center; }
+  .ozet-kart .deger { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .ozet-kart .etiket { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+  .fatura-baslik { font-size: 13px; font-weight: 700; color: #1A4FA0; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: #1A4FA0; }
+  thead th { padding: 10px; color: #fff; font-size: 11px; text-align: left; font-weight: 600; letter-spacing: 0.3px; }
+  thead th:nth-child(3) { text-align: right; }
+  thead th:nth-child(4) { text-align: center; }
+  .toplam-satir td { padding: 10px; background: #EEF2FF; font-weight: 700; font-size: 13px; border-top: 2px solid #1A4FA0; }
+  .footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid #E0E8F5; font-size: 10px; color: #aaa; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="logo-text">SMA MÜHENDİSLİK</div>
+      <div class="logo-sub">Müşteri Hesap Özeti</div>
+    </div>
+    <div class="tarih-blok">
+      <div>Tarih: ${new Date().toLocaleDateString('tr-TR')}</div>
+      <div style="margin-top:4px;">Rapor No: ${musteriId}-${Date.now().toString().slice(-6)}</div>
+    </div>
+  </div>
+
+  <div class="musteri-blok">
+    <h2>${m.ad}</h2>
+    ${m.tip ? `<p>🏷 Tür: ${m.tip}</p>` : ''}
+    ${m.tel ? `<p>📞 Telefon: ${m.tel}</p>` : ''}
+    ${m.vergino ? `<p>🏢 Vergi No: ${m.vergino}</p>` : ''}
+    ${m.adres ? `<p>📍 Adres: ${m.adres}</p>` : ''}
+  </div>
+
+  <div class="ozet-grid">
+    <div class="ozet-kart">
+      <div class="deger" style="color:#1A4FA0;">${mf.length}</div>
+      <div class="etiket">Toplam Fatura</div>
+    </div>
+    <div class="ozet-kart">
+      <div class="deger" style="color:#22C97A;">${fp(odenen)}</div>
+      <div class="etiket">Tahsil Edilen</div>
+    </div>
+    <div class="ozet-kart">
+      <div class="deger" style="color:#F5A623;">${fp(bekliyor)}</div>
+      <div class="etiket">Bekleyen</div>
+    </div>
+    <div class="ozet-kart">
+      <div class="deger" style="color:#FF5C5C;">${fp(gecikti)}</div>
+      <div class="etiket">Gecikmiş</div>
+    </div>
+  </div>
+
+  <div class="fatura-baslik">Fatura Detayları</div>
+  ${mf.length === 0 ? '<p style="color:#aaa;font-size:13px;text-align:center;padding:20px;">Bu müşteriye ait fatura bulunamadı.</p>' : `
+  <table>
+    <thead>
+      <tr>
+        <th>Tarih</th>
+        <th>Hizmet</th>
+        <th style="text-align:right;">Tutar</th>
+        <th style="text-align:center;">Durum</th>
+        <th>Vade</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${faturaRows}
+      <tr class="toplam-satir">
+        <td colspan="2">GENEL TOPLAM</td>
+        <td style="text-align:right;">${fp(toplam)}</td>
+        <td colspan="2"></td>
+      </tr>
+    </tbody>
+  </table>`}
+
+  <div class="footer">
+    Bu belge SMA Mühendislik ödeme takip sistemi tarafından otomatik oluşturulmuştur. • ${new Date().toLocaleDateString('tr-TR')}
+  </div>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(() => { win.print(); }, 500);
+}
+
 function renderMusteriler(){
   const el=document.getElementById('musteri-list');if(!el)return;
   let list=[...musteriler];
@@ -1053,6 +1185,7 @@ function renderMusteriler(){
           <div class="musteri-type">${m.tip||''}${m.tel?' · 📞 '+m.tel:''}${m.vergino?' · 🏢 VN: '+m.vergino:''}</div>
         </div>
         <div style="display:flex;gap:0.4rem;">
+          <button class="btn btn-ghost btn-xs" onclick="musteriPdfIndir(${m.id})" title="PDF İndir">📄</button>
           <button class="btn btn-ghost btn-xs" onclick="editMusteri(${m.id})">✏️</button>
           <button class="btn btn-danger btn-xs" onclick="deleteMusteri(${m.id})">🗑</button>
         </div>
