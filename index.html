@@ -1517,7 +1517,7 @@ function editFis(id){
   document.getElementById('efis-tip').value=f.tip;
   document.getElementById('efis-tarih').value=f.tarih;
   document.getElementById('efis-kdv-oran').value=f.kdvOran;
-  document.getElementById('efis-tutar').value=f.tutar;
+  document.getElementById('efis-tutar').value=f.toplam||f.tutar;
   document.getElementById('efis-belge').value=f.belge||'';
   setTimeout(()=>efisKdvHesapla(), 50);
   document.getElementById('modal-edit-fis').classList.add('open');
