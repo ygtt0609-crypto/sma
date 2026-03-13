@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 :root{
@@ -16,6 +17,12 @@
   --green:#22C97A;--red:#FF5C5C;--yellow:#F5A623;
   --white:#FFFFFF;--muted:rgba(255,255,255,0.45);--text:rgba(255,255,255,0.88);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+:root.light{
+  --bg:#F0F4F8;--bg2:#FFFFFF;--card:#FFFFFF;--card2:#F8FAFC;
+  --border:rgba(0,0,0,0.10);--blue:#2D6DD4;--blue2:#2D6DD4;
+  --green:#16A34A;--red:#DC2626;--yellow:#D97706;
+  --white:#1A202C;--muted:rgba(0,0,0,0.45);--text:rgba(0,0,0,0.85);
 }
 html{height:100%;overflow:hidden;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100%;overflow:hidden;position:fixed;width:100%;}
@@ -233,6 +240,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     <div class="topbar-logo" onclick="showPage('dashboard',document.querySelector('.bnav-btn'))" style="cursor:pointer;"><span>SMA</span> Mühendislik</div>
     <div class="topbar-actions" style="align-items:center;gap:0.5rem;">
       <span id="sync-indicator" title="Senkronize"><span class="sync-dot" id="sync-dot"></span></span>
+      <button class="icon-btn" onclick="toggleMod()" title="Mod Değiştir" id="mod-btn">☀️</button>
       <button class="icon-btn" onclick="exportExcel()" title="Excel İndir">📥</button>
       <button class="icon-btn" onclick="cikisYap()" title="Çıkış">🚪</button>
     </div>
@@ -282,6 +290,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
       <div class="section-label">🤝 Çalışan Bakiyeleri</div>
       <div class="stat-row cols3" id="db-calisan-stats"></div>
 
+      <div class="section-label">📅 Bu Ay Özeti</div>
+      <div id="bu-ay-ozet" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1rem;margin-bottom:1.2rem;"></div>
+      <div id="vade-uyari" style="margin-bottom:1rem;"></div>
       <div class="section-label">⏳ Bekleyen & Gecikmiş</div>
       <div class="card-list" id="db-bekleyen-detay"></div>
       <div class="section-label">📋 Tüm Faturalar</div>
@@ -296,7 +307,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 
     <!-- FATURALAR -->
     <div class="page" id="page-faturalar">
-      <div class="page-header" style="margin-top:0.5rem;"><div class="page-title">Faturalar</div><div class="page-sub" id="fatura-count-sub">Tüm fatura kayıtları</div></div>
+      <div class="page-header" style="margin-top:0.5rem;display:flex;align-items:flex-start;justify-content:space-between;"><div><div class="page-title">Faturalar</div><div class="page-sub" id="fatura-count-sub">Tüm fatura kayıtları</div></div><button class="btn btn-primary btn-sm" onclick="openModal('fatura')" style="margin-top:0.3rem;flex-shrink:0;">＋ Yeni Fatura</button></div>
       <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" type="text" placeholder="Müşteri ara..." oninput="searchFaturalar(this.value)"/></div>
       <div style="display:flex;gap:0.5rem;margin-bottom:0.8rem;">
         <input class="form-input" type="date" id="fatura-tarih-bas" style="flex:1;" onchange="renderFaturalar()" placeholder="Başlangıç"/>
@@ -332,7 +343,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 
     <!-- FİŞ / KDV -->
     <div class="page" id="page-kdv">
-      <div class="page-header" style="margin-top:0.5rem;display:flex;align-items:flex-start;justify-content:space-between;"><div><div class="page-title">Fiş &amp; KDV</div><div class="page-sub">Gelir / gider fişleri</div></div><button class="btn btn-success btn-sm" onclick="fisExcelIndir()" style="margin-top:0.3rem;flex-shrink:0;">📊 Gider Excel</button></div>
+      <div class="page-header" style="margin-top:0.5rem;display:flex;align-items:flex-start;justify-content:space-between;"><div><div class="page-title">Fiş &amp; KDV</div><div class="page-sub">Gelir / gider fişleri</div></div><div style="display:flex;gap:0.5rem;margin-top:0.3rem;flex-shrink:0;"><button class="btn btn-primary btn-sm" onclick="openModal('fis')">＋ Yeni Fiş</button><button class="btn btn-success btn-sm" onclick="fisExcelIndir()">📊 Excel</button></div></div>
       <div class="search-wrap"><span class="search-icon">🔍</span><input class="search-input" type="text" placeholder="Açıklama ara..." oninput="searchFisler(this.value)"/></div>
       <div style="display:flex;gap:0.5rem;margin-bottom:0.8rem;">
         <input class="form-input" type="date" id="fis-tarih-bas" style="flex:1;" onchange="renderKdv()"/>
@@ -362,6 +373,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
         <div class="stat-card"><div class="stat-label">Gider Fiş KDV</div><div class="stat-num" id="kdvh-fis-kdv" style="font-size:1.1rem;">₺0</div></div>
         <div class="stat-card" style="border:1px solid rgba(45,109,212,0.4);"><div class="stat-label">Ödenecek KDV</div><div class="stat-num" id="kdvh-odenecek" style="font-size:1.1rem;color:var(--blue2);">₺0</div></div>
       </div>
+      <div class="section-label">📊 Aylık KDV Trendi</div>
+      <canvas id="kdv-grafik" style="width:100%;max-height:200px;margin-bottom:1rem;"></canvas>
       <div class="section-label">📑 Detay</div>
       <div id="kdvh-detay"></div>
     </div>
@@ -631,7 +644,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
         <span id="fis-toplam-goster" style="font-size:0.85rem;font-weight:700;color:var(--blue2);">₺0</span>
       </div>
     </div>
+    <div style="display:flex;gap:0.5rem;margin-bottom:0.7rem;">
+      <button class="btn btn-ghost btn-sm" style="flex:1;justify-content:center;" onclick="openModal('sablonlar')">📋 Şablon Yükle</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1;justify-content:center;" onclick="sablonKaydet()">💾 Şablon Kaydet</button>
+    </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('fis')">İptal</button><button class="btn btn-primary" onclick="saveFis()">💾 Kaydet</button></div>
+  </div>
+</div>
+
+<!-- SABLON MODAL -->
+<div class="modal-overlay" id="modal-sablonlar">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📋 Şablonlar</div>
+    <div id="sablon-liste"></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('sablonlar')">Kapat</button></div>
   </div>
 </div>
 
@@ -894,6 +921,7 @@ function openModal(type){
     fisKalemSayac=0;
     fisKalemEkle(); // ilk kalem otomatik ekle
   }
+  if(type==='sablonlar'){ renderSablonlar(); }
   if(type==='calisan-odeme'){
     document.getElementById('co-tarih').value=new Date().toISOString().split('T')[0];
     const coSel=document.getElementById('co-calisan');
@@ -1220,6 +1248,43 @@ function renderDashboard(){
         </div>`).join('');
   }
   renderDashboardFaturalar();
+
+  // Bu ay ozeti
+  const buAy = new Date().toISOString().slice(0,7);
+  const buAyFat = faturalar.filter(f=>f.tarih&&f.tarih.startsWith(buAy));
+  const buAyGelir = buAyFat.filter(f=>f.durum==='odendi').reduce((s,f)=>s+f.tutar,0);
+  const buAyBekleyen = buAyFat.filter(f=>f.durum==='bekliyor').reduce((s,f)=>s+f.tutar,0);
+  const buAyGider = fisler.filter(f=>f.tarih&&f.tarih.startsWith(buAy)&&f.tip==='gider').reduce((s,f)=>s+(f.toplam||0),0);
+  const ozEl = document.getElementById('bu-ay-ozet');
+  if(ozEl){
+    const netBuAy = buAyGelir - buAyGider;
+    ozEl.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
+      <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Bu Ay Tahsilat</div><div style="font-weight:800;font-size:1.1rem;color:var(--green);">${formatPara(buAyGelir)}</div></div>
+      <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Bu Ay Gider</div><div style="font-weight:800;font-size:1.1rem;color:var(--red);">${formatPara(buAyGider)}</div></div>
+      <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Bekleyen Fatura</div><div style="font-weight:800;font-size:1.1rem;color:var(--yellow);">${formatPara(buAyBekleyen)}</div></div>
+      <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Net Bu Ay</div><div style="font-weight:800;font-size:1.1rem;color:${netBuAy>=0?'var(--green)':'var(--red)'};">${netBuAy>=0?'+':''}${formatPara(netBuAy)}</div></div>
+    </div>`;
+  }
+
+  // Vade uyarisi
+  const bugun = new Date(); bugun.setHours(0,0,0,0);
+  const yediGun = new Date(bugun); yediGun.setDate(yediGun.getDate()+7);
+  const yaklasanlar = faturalar.filter(f=>{
+    if(f.durum==='odendi') return false;
+    if(!f.vade) return false;
+    const v = new Date(f.vade); v.setHours(0,0,0,0);
+    return v >= bugun && v <= yediGun;
+  });
+  const vadeEl = document.getElementById('vade-uyari');
+  if(vadeEl && yaklasanlar.length > 0){
+    vadeEl.innerHTML=`<div style="background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.3);border-radius:12px;padding:0.8rem 1rem;margin-bottom:1rem;">
+      <div style="font-size:0.75rem;font-weight:700;color:var(--yellow);margin-bottom:0.5rem;">⏰ 7 Gün İçinde Vadesi Dolacak (${yaklasanlar.length} fatura)</div>
+      ${yaklasanlar.map(f=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-top:1px solid rgba(245,166,35,0.15);">
+        <div><div style="font-size:0.8rem;color:var(--white);">${f.musteriAd}</div><div style="font-size:0.68rem;color:var(--muted);">Vade: ${formatTarih(f.vade)}</div></div>
+        <div style="font-weight:700;color:var(--yellow);">${formatPara(f.tutar)}</div>
+      </div>`).join('')}
+    </div>`;
+  } else if(vadeEl) { vadeEl.innerHTML=''; }
 }
 
 // =====================
@@ -1597,6 +1662,7 @@ function updateKdvHesapAyFilter(){
   if(aylar.includes(cur))sel.value=cur;
   renderKdvHesap();
 }
+let kdvGrafikInstance = null;
 function renderKdvHesap(){
   const sel=document.getElementById('kdvh-ay');if(!sel)return;
   const ay=sel.value;if(!ay)return;
@@ -1610,14 +1676,29 @@ function renderKdvHesap(){
   const hesKdv=fatKdv+fisGelirKdv;
   const indKdv=fisGiderKdv;
   const odenecek=hesKdv-indKdv;
+
+  // Önceki ay karşılaştırma
+  const [yil,ay2]=ay.split('-').map(Number);
+  const oncekiAy=ay2===1?`${yil-1}-12`:`${yil}-${String(ay2-1).padStart(2,'0')}`;
+  const fatOnceki=faturalar.filter(f=>f.tarih&&f.tarih.startsWith(oncekiAy)&&f.durum==='odendi');
+  const fisGOnceki=fisler.filter(f=>f.tarih&&f.tarih.startsWith(oncekiAy)&&f.tip==='gelir');
+  const fisDOnceki=fisler.filter(f=>f.tarih&&f.tarih.startsWith(oncekiAy)&&f.tip==='gider');
+  const hesKdvOnceki=fatOnceki.reduce((s,f)=>s+(f.tutar*0.20),0)+fisGOnceki.reduce((s,f)=>s+f.kdvTutar,0);
+  const indKdvOnceki=fisDOnceki.reduce((s,f)=>s+f.kdvTutar,0);
+  const odenecekOnceki=hesKdvOnceki-indKdvOnceki;
+  const fark=odenecek-odenecekOnceki;
+
   document.getElementById('kdvh-fat-gelir').textContent=formatPara(fatGelir);
   document.getElementById('kdvh-fat-kdv').textContent=formatPara(fatKdv);
   document.getElementById('kdvh-fis-kdv').textContent=formatPara(indKdv);
   const oEl=document.getElementById('kdvh-odenecek');
   oEl.textContent=formatPara(Math.abs(odenecek));
   oEl.style.color=odenecek<=0?'var(--green)':'var(--blue2)';
+
   const detay=document.getElementById('kdvh-detay');
   if(detay){
+    const farkRenk=fark>0?'var(--red)':'var(--green)';
+    const farkIkon=fark>0?'▲':'▼';
     detay.innerHTML=`<div class="kdv-table">
       <div class="kdv-row"><span class="kdv-row-label">Fatura Gelir (KDV Hariç)</span><span class="kdv-row-val">${formatPara(fatGelir)}</span></div>
       <div class="kdv-row"><span class="kdv-row-label">Fatura Hesaplanan KDV (%20)</span><span class="kdv-row-val" style="color:var(--yellow);">${formatPara(fatKdv)}</span></div>
@@ -1625,8 +1706,143 @@ function renderKdvHesap(){
       <div class="kdv-row"><span class="kdv-row-label">Toplam Hesaplanan KDV</span><span class="kdv-row-val" style="color:var(--yellow);">${formatPara(hesKdv)}</span></div>
       <div class="kdv-row"><span class="kdv-row-label">İndirilecek KDV (Gider Fişleri)</span><span class="kdv-row-val" style="color:var(--green);">${formatPara(indKdv)}</span></div>
       <div class="kdv-row highlight"><span class="kdv-row-label">${odenecek>=0?'Ödenecek KDV':'KDV İadesi'}</span><span class="kdv-row-val">${formatPara(Math.abs(odenecek))}</span></div>
+      <div class="kdv-row"><span class="kdv-row-label">Geçen Aya Göre</span><span class="kdv-row-val" style="color:${farkRenk};">${farkIkon} ${formatPara(Math.abs(fark))}</span></div>
     </div>`;
   }
+
+  // KDV Trend Grafiği
+  const fAylar=[...new Set(faturalar.map(f=>f.tarih?f.tarih.slice(0,7):'').filter(Boolean))];
+  const fisAylar=[...new Set(fisler.map(f=>f.tarih?f.tarih.slice(0,7):'').filter(Boolean))];
+  const tumAylar=[...new Set([...fAylar,...fisAylar])].sort().slice(-6);
+  const grafikLabels=tumAylar.map(a=>a.replace('-','/'));
+  const hesData=tumAylar.map(a=>{
+    const fk=faturalar.filter(f=>f.tarih&&f.tarih.startsWith(a)&&f.durum==='odendi').reduce((s,f)=>s+(f.tutar*0.20),0);
+    const gk=fisler.filter(f=>f.tarih&&f.tarih.startsWith(a)&&f.tip==='gelir').reduce((s,f)=>s+f.kdvTutar,0);
+    return parseFloat((fk+gk).toFixed(2));
+  });
+  const indData=tumAylar.map(a=>parseFloat(fisler.filter(f=>f.tarih&&f.tarih.startsWith(a)&&f.tip==='gider').reduce((s,f)=>s+f.kdvTutar,0).toFixed(2)));
+  const odenData=tumAylar.map((a,i)=>parseFloat((hesData[i]-indData[i]).toFixed(2)));
+  const canvas=document.getElementById('kdv-grafik');
+  if(canvas && typeof Chart !== 'undefined'){
+    if(kdvGrafikInstance) kdvGrafikInstance.destroy();
+    kdvGrafikInstance=new Chart(canvas,{
+      type:'bar',
+      data:{
+        labels:grafikLabels,
+        datasets:[
+          {label:'Hesaplanan KDV',data:hesData,backgroundColor:'rgba(245,166,35,0.7)',borderRadius:6},
+          {label:'İndirilecek KDV',data:indData,backgroundColor:'rgba(34,201,122,0.7)',borderRadius:6},
+          {label:'Ödenecek KDV',data:odenData,backgroundColor:'rgba(77,141,244,0.7)',borderRadius:6},
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'rgba(255,255,255,0.7)',font:{size:10}}}},
+        scales:{
+          x:{ticks:{color:'rgba(255,255,255,0.5)',font:{size:10}},grid:{color:'rgba(255,255,255,0.05)'}},
+          y:{ticks:{color:'rgba(255,255,255,0.5)',font:{size:10},callback:v=>'₺'+v.toLocaleString('tr-TR')},grid:{color:'rgba(255,255,255,0.05)'}}
+        }
+      }
+    });
+  }
+}
+
+
+// =====================
+// KARANLIK/AYDINLIK MOD
+// =====================
+function toggleMod() {
+  const isLight = document.documentElement.classList.toggle('light');
+  document.getElementById('mod-btn').textContent = isLight ? '🌙' : '☀️';
+  localStorage.setItem('sma-mod', isLight ? 'light' : 'dark');
+}
+(function(){
+  const mod = localStorage.getItem('sma-mod');
+  if(mod === 'light') { document.documentElement.classList.add('light'); }
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('mod-btn');
+    if(btn) btn.textContent = document.documentElement.classList.contains('light') ? '🌙' : '☀️';
+  });
+})();
+
+// =====================
+// FATURA KOPYALA
+// =====================
+async function kopyalaFatura(id) {
+  const f = faturalar.find(x=>x.id==id); if(!f) return;
+  const yeniId = newId();
+  const today = new Date().toISOString().split('T')[0];
+  const vade = new Date(); vade.setDate(vade.getDate()+30);
+  const ok = await sbEkle('faturalar', {
+    id: yeniId, musteri_id: f.musteriId, musteri_ad: f.musteriAd,
+    hizmet: f.hizmet, tutar: f.tutar, durum: 'bekliyor',
+    tarih: today, vade: vade.toISOString().split('T')[0], notu: f.not||''
+  });
+  if(!ok) return;
+  await veriYukle(); renderDashboard(); renderFaturalar(); showToast('📋 Fatura kopyalandı!');
+}
+
+// =====================
+// GİDER ŞABLONLARI
+// =====================
+let giderSablonlar = JSON.parse(localStorage.getItem('sma-sablonlar') || '[]');
+function sablonKaydet() {
+  const aciklama = document.getElementById('fis-aciklama').value.trim();
+  const kalemEls = document.querySelectorAll('#fis-kalemler > div');
+  if(!aciklama && !kalemEls.length) return showToast('Önce fiş doldurun!', true);
+  const kalemler = [];
+  kalemEls.forEach(div => {
+    const idMatch = div.id.match(/fis-kalem-(\d+)/); if(!idMatch) return;
+    const kid = idMatch[1];
+    kalemler.push({
+      aciklama: document.getElementById('fis-kalem-aciklama-'+kid)?.value||'',
+      kdvOran: document.getElementById('fis-kalem-kdvoran-'+kid)?.value||'20',
+      tutar: document.getElementById('fis-kalem-tutar-'+kid)?.value||''
+    });
+  });
+  const sablon = { id: Date.now(), ad: aciklama || 'Şablon', tip: document.getElementById('fis-tip').value, kalemler };
+  giderSablonlar.push(sablon);
+  localStorage.setItem('sma-sablonlar', JSON.stringify(giderSablonlar));
+  showToast('✅ Şablon kaydedildi!');
+  renderSablonlar();
+}
+function sablonUygula(id) {
+  const s = giderSablonlar.find(x=>x.id==id); if(!s) return;
+  document.getElementById('fis-tip').value = s.tip;
+  document.getElementById('fis-aciklama').value = s.ad;
+  document.getElementById('fis-kalemler').innerHTML = '';
+  fisKalemSayac = 0;
+  s.kalemler.forEach(k => {
+    fisKalemEkle();
+    const kid = fisKalemSayac - 1;
+    setTimeout(() => {
+      const aEl = document.getElementById('fis-kalem-aciklama-'+kid);
+      const oEl = document.getElementById('fis-kalem-kdvoran-'+kid);
+      const tEl = document.getElementById('fis-kalem-tutar-'+kid);
+      if(aEl) aEl.value = k.aciklama;
+      if(oEl) oEl.value = k.kdvOran;
+      if(tEl) tEl.value = k.tutar;
+      fisToplamHesapla();
+    }, 50);
+  });
+  closeModal('sablonlar');
+  showToast('✅ Şablon uygulandı!');
+}
+function sablonSil(id) {
+  giderSablonlar = giderSablonlar.filter(x=>x.id!=id);
+  localStorage.setItem('sma-sablonlar', JSON.stringify(giderSablonlar));
+  renderSablonlar();
+}
+function renderSablonlar() {
+  const el = document.getElementById('sablon-liste'); if(!el) return;
+  if(!giderSablonlar.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Henüz şablon yok.</div></div>'; return; }
+  el.innerHTML = giderSablonlar.map(s=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:0.7rem 0;border-bottom:1px solid var(--border);">
+    <div><div style="font-size:0.85rem;font-weight:600;color:var(--white);">${s.ad}</div><div style="font-size:0.7rem;color:var(--muted);">${s.tip==='gider'?'Gider':'Gelir'} · ${s.kalemler.length} kalem</div></div>
+    <div style="display:flex;gap:0.4rem;">
+      <button class="btn btn-primary btn-xs" onclick="sablonUygula(${s.id})">Uygula</button>
+      <button class="btn btn-danger btn-xs" onclick="sablonSil(${s.id})">🗑</button>
+    </div>
+  </div>`).join('');
 }
 
 // =====================
