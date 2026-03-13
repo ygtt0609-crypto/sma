@@ -700,7 +700,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
     </div>
     <div class="form-row">
       <div><label class="form-label">KDV Oranı</label><select class="form-input" id="efis-kdv-oran" onchange="efisKdvHesapla()"><option value="0">%0</option><option value="1">%1</option><option value="10">%10</option><option value="20">%20</option></select></div>
-      <div><label class="form-label">Tutar (KDV Hariç)</label><input class="form-input" type="text" inputmode="decimal" id="efis-tutar" oninput="efisKdvHesapla()"/></div>
+      <div><label class="form-label">Tutar (KDV Dahil)</label><input class="form-input" type="text" inputmode="decimal" id="efis-tutar" oninput="efisKdvHesapla()"/></div>
     </div>
     <div style="background:rgba(45,109,212,0.1);border:1px solid rgba(45,109,212,0.3);border-radius:10px;padding:0.6rem 0.9rem;margin-bottom:0.9rem;display:flex;justify-content:space-between;align-items:center;">
       <div style="font-size:0.75rem;color:var(--muted);">KDV: <span id="efis-kdv-goster" style="color:var(--yellow);">₺0</span></div>
@@ -1466,12 +1466,12 @@ function fisToplamHesapla() {
 }
 function fisKdvHesapla(){fisToplamHesapla();}
 function efisKdvHesapla(){
-  const tutar=parsePara(document.getElementById('efis-tutar').value);
+  const kdvDahil=parsePara(document.getElementById('efis-tutar').value);
   const oran=parseInt(document.getElementById('efis-kdv-oran').value)||0;
-  const kdv=parseFloat((tutar*oran/100).toFixed(2));
-  const toplam=parseFloat((tutar+kdv).toFixed(2));
+  const matrah=parseFloat((kdvDahil/(1+oran/100)).toFixed(2));
+  const kdv=parseFloat((kdvDahil-matrah).toFixed(2));
   document.getElementById('efis-kdv-goster').textContent=formatPara(kdv);
-  document.getElementById('efis-toplam-goster').textContent=formatPara(toplam);
+  document.getElementById('efis-toplam-goster').textContent=formatPara(kdvDahil);
 }
 async function saveFis(){
   // Kalemleri topla
@@ -1516,7 +1516,6 @@ function editFis(id){
   document.getElementById('efis-id').value=id;
   document.getElementById('efis-tip').value=f.tip;
   document.getElementById('efis-tarih').value=f.tarih;
-  document.getElementById('efis-aciklama').value=f.aciklama||'';
   document.getElementById('efis-kdv-oran').value=f.kdvOran;
   document.getElementById('efis-tutar').value=f.tutar;
   document.getElementById('efis-belge').value=f.belge||'';
@@ -1525,11 +1524,12 @@ function editFis(id){
 }
 async function saveEditFis(){
   const id=document.getElementById('efis-id').value;
-  const tutar=parsePara(document.getElementById('efis-tutar').value);
-  if(!tutar||tutar<=0)return showToast('Geçerli tutar girin!',true);
+  const kdvDahil=parsePara(document.getElementById('efis-tutar').value);
+  if(!kdvDahil||kdvDahil<=0)return showToast('Geçerli tutar girin!',true);
   const kdvOran=parseInt(document.getElementById('efis-kdv-oran').value)||0;
-  const kdvTutar=parseFloat((tutar*kdvOran/100).toFixed(2));
-  const ok=await sbGuncelle('fisler',id,{tip:document.getElementById('efis-tip').value,tarih:document.getElementById('efis-tarih').value,aciklama:document.getElementById('efis-aciklama').value,kdv_oran:kdvOran,tutar,kdv_tutar:kdvTutar,toplam:parseFloat((tutar+kdvTutar).toFixed(2)),belge:document.getElementById('efis-belge').value});
+  const tutar=parseFloat((kdvDahil/(1+kdvOran/100)).toFixed(2));
+  const kdvTutar=parseFloat((kdvDahil-tutar).toFixed(2));
+  const ok=await sbGuncelle('fisler',id,{tip:document.getElementById('efis-tip').value,tarih:document.getElementById('efis-tarih').value,aciklama:'',kdv_oran:kdvOran,tutar,kdv_tutar:kdvTutar,toplam:kdvDahil,belge:document.getElementById('efis-belge').value});
   if(!ok)return;
   await veriYukle(); closeModal('edit-fis'); renderKdv(); showToast('✅ Güncellendi!');
 }
