@@ -279,9 +279,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 
     <!-- GENEL BAKIŞ -->
     <div class="page active" id="page-dashboard">
-      <div class="page-header" style="margin-top:0.5rem;">
-        <div class="page-title">Genel Bakış</div>
-        <div class="page-sub" id="bugun-tarih"></div>
+      <div class="page-header" style="margin-top:0.5rem;display:flex;align-items:flex-start;justify-content:space-between;">
+        <div>
+          <div class="page-title">Genel Bakış</div>
+          <div class="page-sub" id="bugun-tarih"></div>
+        </div>
+      </div>
+
+      <!-- AY / TOPLAM SEÇİCİ -->
+      <div style="display:flex;gap:0.5rem;margin-bottom:1rem;align-items:center;">
+        <div style="display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;flex-shrink:0;">
+          <button id="db-mod-toplam" onclick="dbModDegistir('toplam')" style="padding:0.4rem 0.8rem;border:none;cursor:pointer;font-size:0.75rem;font-weight:700;font-family:'DM Sans',sans-serif;background:var(--blue);color:#fff;transition:all 0.15s;">Toplam</button>
+          <button id="db-mod-aylik" onclick="dbModDegistir('aylik')" style="padding:0.4rem 0.8rem;border:none;cursor:pointer;font-size:0.75rem;font-weight:700;font-family:'DM Sans',sans-serif;background:none;color:var(--muted);transition:all 0.15s;">Aylık</button>
+        </div>
+        <select id="db-ay-secici" class="form-input" style="display:none;flex:1;" onchange="renderDashboard()"></select>
       </div>
 
       <div class="section-label">💰 Genel Özet (Fatura + Çalışan)</div>
@@ -1452,30 +1463,106 @@ function renderFaturalar(){
 }
 
 // =====================
+// DASHBOARD MOD & AY
+// =====================
+let dbMod = 'toplam'; // 'toplam' veya 'aylik'
+
+function dbModDegistir(mod) {
+  dbMod = mod;
+  const secici = document.getElementById('db-ay-secici');
+  const btnToplam = document.getElementById('db-mod-toplam');
+  const btnAylik = document.getElementById('db-mod-aylik');
+  if(mod === 'aylik') {
+    secici.style.display = 'block';
+    btnAylik.style.background = 'var(--blue)'; btnAylik.style.color = '#fff';
+    btnToplam.style.background = 'none'; btnToplam.style.color = 'var(--muted)';
+    dbAySeciciDoldur();
+  } else {
+    secici.style.display = 'none';
+    btnToplam.style.background = 'var(--blue)'; btnToplam.style.color = '#fff';
+    btnAylik.style.background = 'none'; btnAylik.style.color = 'var(--muted)';
+  }
+  renderDashboard();
+}
+
+function dbAySeciciDoldur() {
+  const secici = document.getElementById('db-ay-secici');
+  const mevcutDeger = secici.value;
+  // Fatura ve fişlerden tüm ayları topla
+  const aylarSet = new Set();
+  faturalar.forEach(f => { if(f.tarih) aylarSet.add(f.tarih.slice(0,7)); });
+  fisler.forEach(f => { if(f.tarih) aylarSet.add(f.tarih.slice(0,7)); });
+  calisanOdemeler.forEach(o => { if(o.tarih) aylarSet.add(o.tarih.slice(0,7)); });
+  // Bu ayı da ekle
+  aylarSet.add(new Date().toISOString().slice(0,7));
+  const aylar = [...aylarSet].sort().reverse();
+  const buAy = new Date().toISOString().slice(0,7);
+  secici.innerHTML = aylar.map(ay => {
+    const [y, m] = ay.split('-');
+    const tr = new Date(y, m-1, 1).toLocaleDateString('tr-TR', {month:'long', year:'numeric'});
+    return `<option value="${ay}" ${ay === (mevcutDeger||buAy) ? 'selected' : ''}>${tr}</option>`;
+  }).join('');
+  if(!mevcutDeger) secici.value = buAy;
+}
+
+function dbSecilenAy() {
+  if(dbMod === 'aylik') {
+    return document.getElementById('db-ay-secici')?.value || new Date().toISOString().slice(0,7);
+  }
+  return null; // toplam mod
+}
+
+// =====================
 // DASHBOARD
 // =====================
 function dbFilterFatura(v){
   dbFaturaFilter=v;
   document.querySelectorAll('[id^="db-filter-"]').forEach(b=>b.classList.remove('active'));
   const btn=document.getElementById('db-filter-'+v);if(btn)btn.classList.add('active');
-  renderDashboardFaturalar();
+  renderDashboard();
 }
-function renderDashboardFaturalar(){
-  let list=[...faturalar];
-  if(dbFaturaFilter!=='hepsi')list=list.filter(f=>f.durum===dbFaturaFilter);
+function renderDashboardFaturalar(liste){
+  const list = liste || faturalar;
+  let filtered = [...list];
+  if(dbFaturaFilter!=='hepsi')filtered=filtered.filter(f=>f.durum===dbFaturaFilter);
   const el=document.getElementById('db-fatura-list');if(!el)return;
-  if(!list.length){el.innerHTML=`<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Kayıt bulunamadı.</div></div>`;return;}
-  el.innerHTML=list.map(f=>faturaCard(f)).join('');
+  if(!filtered.length){el.innerHTML=`<div class="empty"><div class="empty-icon">🧾</div><div class="empty-text">Kayıt bulunamadı.</div></div>`;return;}
+  el.innerHTML=filtered.map(f=>faturaCard(f)).join('');
 }
 function renderDashboard(){
-  const fatToplam=faturalar.reduce((s,f)=>s+f.tutar,0);
-  const fatOdenen=faturalar.filter(f=>f.durum==='odendi').reduce((s,f)=>s+f.tutar,0);
-  const fatBekleyen=faturalar.filter(f=>f.durum==='bekliyor').reduce((s,f)=>s+f.tutar,0);
-  const fatGecikme=faturalar.filter(f=>f.durum==='gecikti').reduce((s,f)=>s+f.tutar,0);
+  const secilenAy = dbSecilenAy(); // null = toplam, 'YYYY-MM' = aylik
+
+  // Ay filtrelemesi
+  const fatFiltre = secilenAy
+    ? faturalar.filter(f => f.tarih && f.tarih.startsWith(secilenAy))
+    : faturalar;
+  const fisFiltre = secilenAy
+    ? fisler.filter(f => f.tarih && f.tarih.startsWith(secilenAy))
+    : fisler;
+  const calisanFiltre = secilenAy
+    ? calisanOdemeler.filter(o => o.tarih && o.tarih.startsWith(secilenAy))
+    : calisanOdemeler;
+
+  // Başlık güncelle
+  const sectionLbl = document.querySelector('#page-dashboard .section-label');
+  if(sectionLbl) {
+    if(secilenAy) {
+      const [y, m] = secilenAy.split('-');
+      const ayAd = new Date(y, m-1, 1).toLocaleDateString('tr-TR',{month:'long',year:'numeric'});
+      sectionLbl.textContent = `💰 ${ayAd} Özeti (Fatura + Çalışan)`;
+    } else {
+      sectionLbl.textContent = '💰 Genel Özet (Fatura + Çalışan)';
+    }
+  }
+
+  const fatToplam=fatFiltre.reduce((s,f)=>s+f.tutar,0);
+  const fatOdenen=fatFiltre.filter(f=>f.durum==='odendi').reduce((s,f)=>s+f.tutar,0);
+  const fatBekleyen=fatFiltre.filter(f=>f.durum==='bekliyor').reduce((s,f)=>s+f.tutar,0);
+  const fatGecikme=fatFiltre.filter(f=>f.durum==='gecikti').reduce((s,f)=>s+f.tutar,0);
 
   let toplamCalisanAlacak=0,toplamCalisanOdeme=0,toplamCalisanTahsil=0;
   CALISANLAR.forEach(c=>{
-    const ods=calisanOdemeler.filter(o=>o.calisanId===c.id);
+    const ods=calisanFiltre.filter(o=>o.calisanId===c.id);
     const alacak=ods.filter(o=>o.tur==='alacak').reduce((s,o)=>s+o.tutar,0);
     const tahsil=ods.filter(o=>o.tur==='alacak'&&o.odendi).reduce((s,o)=>s+o.tutar,0);
     const odm=ods.filter(o=>o.tur==='odeme').reduce((s,o)=>s+o.tutar,0);
@@ -1488,10 +1575,10 @@ function renderDashboard(){
   const genelOdenen=fatOdenen+toplamCalisanTahsil;
   const genelBekleyen=fatBekleyen+(toplamCalisanAlacak-toplamCalisanTahsil);
   const genelGecikme=fatGecikme;
-  const toplamKayit=faturalar.length+calisanOdemeler.filter(o=>o.tur==='alacak').length;
-  const odenenKayit=faturalar.filter(f=>f.durum==='odendi').length+calisanOdemeler.filter(o=>o.tur==='alacak'&&o.odendi).length;
-  const bekleyenKayit=faturalar.filter(f=>f.durum==='bekliyor').length+calisanOdemeler.filter(o=>o.tur==='alacak'&&!o.odendi).length;
-  const gecikmeKayit=faturalar.filter(f=>f.durum==='gecikti').length;
+  const toplamKayit=fatFiltre.length+calisanFiltre.filter(o=>o.tur==='alacak').length;
+  const odenenKayit=fatFiltre.filter(f=>f.durum==='odendi').length+calisanFiltre.filter(o=>o.tur==='alacak'&&o.odendi).length;
+  const bekleyenKayit=fatFiltre.filter(f=>f.durum==='bekliyor').length+calisanFiltre.filter(o=>o.tur==='alacak'&&!o.odendi).length;
+  const gecikmeKayit=fatFiltre.filter(f=>f.durum==='gecikti').length;
 
   document.getElementById('stat-toplam').textContent=formatPara(genelToplam);
   document.getElementById('stat-odenen').textContent=formatPara(genelOdenen);
@@ -1505,7 +1592,7 @@ function renderDashboard(){
   const calEl=document.getElementById('db-calisan-stats');
   if(calEl){
     calEl.innerHTML=CALISANLAR.map(c=>{
-      const ods=calisanOdemeler.filter(o=>o.calisanId===c.id);
+      const ods=calisanFiltre.filter(o=>o.calisanId===c.id);
       const alacak=ods.filter(o=>o.tur==='alacak').reduce((s,o)=>s+o.tutar,0);
       const odm=ods.filter(o=>o.tur==='odeme').reduce((s,o)=>s+o.tutar,0);
       const bakiye=alacak-odm;
@@ -1513,8 +1600,8 @@ function renderDashboard(){
     }).join('');
   }
 
-  const fisToplamGider=fisler.filter(f=>f.tip==="gider").reduce((s,f)=>s+(f.toplam||0),0);
-  const fisToplamGelir=fisler.filter(f=>f.tip==="gelir").reduce((s,f)=>s+(f.toplam||0),0);
+  const fisToplamGider=fisFiltre.filter(f=>f.tip==="gider").reduce((s,f)=>s+(f.toplam||0),0);
+  const fisToplamGelir=fisFiltre.filter(f=>f.tip==="gelir").reduce((s,f)=>s+(f.toplam||0),0);
   const netGelir=fatOdenen+toplamCalisanAlacak+fisToplamGelir;
   const netGider=toplamCalisanOdeme+fisToplamGider;
   const netBakiye=netGelir-netGider;
@@ -1529,7 +1616,7 @@ function renderDashboard(){
 
   const bekDet=document.getElementById('db-bekleyen-detay');
   if(bekDet){
-    const bekList=faturalar.filter(f=>f.durum==='bekliyor'||f.durum==='gecikti').sort((a,b)=>a.durum==='gecikti'&&b.durum!=='gecikti'?-1:0);
+    const bekList=fatFiltre.filter(f=>f.durum==='bekliyor'||f.durum==='gecikti').sort((a,b)=>a.durum==='gecikti'&&b.durum!=='gecikti'?-1:0);
     bekDet.innerHTML=bekList.length===0
       ?`<div class="empty"><div class="empty-icon" style="font-size:1.8rem;">✅</div><div class="empty-text">Bekleyen alacak yok.</div></div>`
       :bekList.map(f=>`<div class="card-item">
@@ -1545,29 +1632,33 @@ function renderDashboard(){
           </div>
         </div>`).join('');
   }
-  renderDashboardFaturalar();
+  renderDashboardFaturalar(fatFiltre);
 
-  // Bu ay ozeti
-  const buAy = new Date().toISOString().slice(0,7);
-  const buAyFat = faturalar.filter(f=>f.tarih&&f.tarih.startsWith(buAy));
+  // Bu ay / seçilen ay özeti
+  const ozAy = secilenAy || new Date().toISOString().slice(0,7);
+  const buAyFat = secilenAy ? fatFiltre : faturalar.filter(f=>f.tarih&&f.tarih.startsWith(ozAy));
   const buAyGelir = buAyFat.filter(f=>f.durum==='odendi').reduce((s,f)=>s+f.tutar,0);
   const buAyBekleyen = buAyFat.filter(f=>f.durum==='bekliyor').reduce((s,f)=>s+f.tutar,0);
-  const buAyGider = fisler.filter(f=>f.tarih&&f.tarih.startsWith(buAy)&&f.tip==='gider').reduce((s,f)=>s+(f.toplam||0),0);
+  const buAyGider = (secilenAy ? fisFiltre : fisler.filter(f=>f.tarih&&f.tarih.startsWith(ozAy))).filter(f=>f.tip==='gider').reduce((s,f)=>s+(f.toplam||0),0);
+  const [oy,om] = ozAy.split('-');
+  const ozAyAd = new Date(oy,om-1,1).toLocaleDateString('tr-TR',{month:'long',year:'numeric'});
   const ozEl = document.getElementById('bu-ay-ozet');
   if(ozEl){
     const netBuAy = buAyGelir - buAyGider;
-    ozEl.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
-      <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Bu Ay Tahsilat</div><div style="font-weight:800;font-size:1.1rem;color:var(--green);">${formatPara(buAyGelir)}</div></div>
-      <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Bu Ay Gider</div><div style="font-weight:800;font-size:1.1rem;color:var(--red);">${formatPara(buAyGider)}</div></div>
-      <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Bekleyen Fatura</div><div style="font-weight:800;font-size:1.1rem;color:var(--yellow);">${formatPara(buAyBekleyen)}</div></div>
-      <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Net Bu Ay</div><div style="font-weight:800;font-size:1.1rem;color:${netBuAy>=0?'var(--green)':'var(--red)'};">${netBuAy>=0?'+':''}${formatPara(netBuAy)}</div></div>
-    </div>`;
+    ozEl.innerHTML=`
+      <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.7rem;">${ozAyAd}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
+        <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Tahsilat</div><div style="font-weight:800;font-size:1.1rem;color:var(--green);">${formatPara(buAyGelir)}</div></div>
+        <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Gider</div><div style="font-weight:800;font-size:1.1rem;color:var(--red);">${formatPara(buAyGider)}</div></div>
+        <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Bekleyen Fatura</div><div style="font-weight:800;font-size:1.1rem;color:var(--yellow);">${formatPara(buAyBekleyen)}</div></div>
+        <div><div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Net</div><div style="font-weight:800;font-size:1.1rem;color:${netBuAy>=0?'var(--green)':'var(--red)'};">${netBuAy>=0?'+':''}${formatPara(netBuAy)}</div></div>
+      </div>`;
   }
 
-  // Vade uyarisi
+  // Vade uyarisi (sadece toplam modda veya bu ay seçiliyse göster)
   const bugun = new Date(); bugun.setHours(0,0,0,0);
   const yediGun = new Date(bugun); yediGun.setDate(yediGun.getDate()+7);
-  const yaklasanlar = faturalar.filter(f=>{
+  const yaklasanlar = fatFiltre.filter(f=>{
     if(f.durum==='odendi') return false;
     if(!f.vade) return false;
     const v = new Date(f.vade); v.setHours(0,0,0,0);
@@ -1951,11 +2042,11 @@ let kdvGrafikInstance = null;
 function renderKdvHesap(){
   const sel=document.getElementById('kdvh-ay');if(!sel)return;
   const ay=sel.value;if(!ay)return;
-  const fatAy=faturalar.filter(f=>f.tarih&&f.tarih.startsWith(ay)&&f.durum==='odendi');
+  const fatAy=faturalar.filter(f=>f.tarih&&f.tarih.startsWith(ay));
   const fisGelir=fisler.filter(f=>f.tarih&&f.tarih.startsWith(ay)&&f.tip==='gelir');
   const fisGider=fisler.filter(f=>f.tarih&&f.tarih.startsWith(ay)&&f.tip==='gider');
   const fatGelir=fatAy.reduce((s,f)=>s+f.tutar,0);
-  const fatKdv=fatAy.reduce((s,f)=>s+(f.tutar*0.20),0);
+  const fatKdv=fatAy.reduce((s,f)=>s+(f.tutar*(f.kdvOran||20)/100),0);
   const fisGelirKdv=fisGelir.reduce((s,f)=>s+f.kdvTutar,0);
   const fisGiderKdv=fisGider.reduce((s,f)=>s+f.kdvTutar,0);
   const hesKdv=fatKdv+fisGelirKdv;
@@ -1965,10 +2056,10 @@ function renderKdvHesap(){
   // Önceki ay karşılaştırma
   const [yil,ay2]=ay.split('-').map(Number);
   const oncekiAy=ay2===1?`${yil-1}-12`:`${yil}-${String(ay2-1).padStart(2,'0')}`;
-  const fatOnceki=faturalar.filter(f=>f.tarih&&f.tarih.startsWith(oncekiAy)&&f.durum==='odendi');
+  const fatOnceki=faturalar.filter(f=>f.tarih&&f.tarih.startsWith(oncekiAy));
   const fisGOnceki=fisler.filter(f=>f.tarih&&f.tarih.startsWith(oncekiAy)&&f.tip==='gelir');
   const fisDOnceki=fisler.filter(f=>f.tarih&&f.tarih.startsWith(oncekiAy)&&f.tip==='gider');
-  const hesKdvOnceki=fatOnceki.reduce((s,f)=>s+(f.tutar*0.20),0)+fisGOnceki.reduce((s,f)=>s+f.kdvTutar,0);
+  const hesKdvOnceki=fatOnceki.reduce((s,f)=>s+(f.tutar*(f.kdvOran||20)/100),0)+fisGOnceki.reduce((s,f)=>s+f.kdvTutar,0);
   const indKdvOnceki=fisDOnceki.reduce((s,f)=>s+f.kdvTutar,0);
   const odenecekOnceki=hesKdvOnceki-indKdvOnceki;
   const fark=odenecek-odenecekOnceki;
@@ -2001,7 +2092,7 @@ function renderKdvHesap(){
   const tumAylar=[...new Set([...fAylar,...fisAylar])].sort().slice(-6);
   const grafikLabels=tumAylar.map(a=>a.replace('-','/'));
   const hesData=tumAylar.map(a=>{
-    const fk=faturalar.filter(f=>f.tarih&&f.tarih.startsWith(a)&&f.durum==='odendi').reduce((s,f)=>s+(f.tutar*0.20),0);
+    const fk=faturalar.filter(f=>f.tarih&&f.tarih.startsWith(a)).reduce((s,f)=>s+(f.tutar*(f.kdvOran||20)/100),0);
     const gk=fisler.filter(f=>f.tarih&&f.tarih.startsWith(a)&&f.tip==='gelir').reduce((s,f)=>s+f.kdvTutar,0);
     return parseFloat((fk+gk).toFixed(2));
   });
@@ -2136,21 +2227,38 @@ function renderSablonlar() {
 function muhasebeExcelIndir() {
   const wb = XLSX.utils.book_new();
   const now = new Date();
-  const tarihStr = now.toLocaleDateString('tr-TR');
-  const ay = (now.getMonth()+1).toString().padStart(2,'0');
 
   function p(n) { return Math.round((n||0)*100)/100; }
   function tf(d) { if(!d) return ''; const[y,m,g]=d.split('-'); return `${g}.${m}.${y}`; }
   function df(d) { return d==='odendi'?'Odendi':d==='bekliyor'?'Bekliyor':'Gecikti'; }
 
+  // KDV Beyanname sayfasındaki seçili ayı al
+  const kdvhAyEl = document.getElementById('kdvh-ay');
+  const secilenAyStr = kdvhAyEl ? kdvhAyEl.value : '';
+  let ayAd = '';
+  let dosyaAySuffix = '';
+
+  if(secilenAyStr) {
+    const [y, m] = secilenAyStr.split('-');
+    ayAd = new Date(y, m-1, 1).toLocaleDateString('tr-TR', {month:'long', year:'numeric'});
+    dosyaAySuffix = `${y}_${m}`;
+  } else {
+    ayAd = 'Tüm Dönem';
+    dosyaAySuffix = `${now.getFullYear()}_${(now.getMonth()+1).toString().padStart(2,'0')}`;
+  }
+
+  // Ay filtrelemesi
+  const fatFiltre      = secilenAyStr ? faturalar.filter(f=>f.tarih&&f.tarih.startsWith(secilenAyStr)) : faturalar;
+  const fisFiltre      = secilenAyStr ? fisler.filter(f=>f.tarih&&f.tarih.startsWith(secilenAyStr)) : fisler;
+  const calFiltre      = secilenAyStr ? calisanOdemeler.filter(o=>o.tarih&&o.tarih.startsWith(secilenAyStr)) : calisanOdemeler;
+
   // Hesaplamalar
-  const fatOdendi   = p(faturalar.filter(f=>f.durum==='odendi').reduce((s,f)=>s+f.tutar,0));
-  const fatBekliyor = p(faturalar.filter(f=>f.durum==='bekliyor').reduce((s,f)=>s+f.tutar,0));
-  const fatGecikti  = p(faturalar.filter(f=>f.durum==='gecikti').reduce((s,f)=>s+f.tutar,0));
-  const fatToplam   = p(faturalar.reduce((s,f)=>s+f.tutar,0));
-  const fatKdv      = p(faturalar.filter(f=>f.durum==='odendi').reduce((s,f)=>s+(f.tutar*0.20),0));
-  const gelirFisler = fisler.filter(f=>f.tip==='gelir');
-  const giderFisler = fisler.filter(f=>f.tip==='gider');
+  const fatOdendi   = p(fatFiltre.filter(f=>f.durum==='odendi').reduce((s,f)=>s+f.tutar,0));
+  const fatBekliyor = p(fatFiltre.filter(f=>f.durum==='bekliyor').reduce((s,f)=>s+f.tutar,0));
+  const fatGecikti  = p(fatFiltre.filter(f=>f.durum==='gecikti').reduce((s,f)=>s+f.tutar,0));
+  const fatKdv      = p(fatFiltre.reduce((s,f)=>s+(f.tutar*(f.kdvOran||20)/100),0));
+  const gelirFisler = fisFiltre.filter(f=>f.tip==='gelir');
+  const giderFisler = fisFiltre.filter(f=>f.tip==='gider');
   const gelirMatrah = p(gelirFisler.reduce((s,f)=>s+(f.tutar||0),0));
   const gelirKdv    = p(gelirFisler.reduce((s,f)=>s+(f.kdvTutar||0),0));
   const gelirToplam = p(gelirFisler.reduce((s,f)=>s+(f.toplam||0),0));
@@ -2160,18 +2268,18 @@ function muhasebeExcelIndir() {
   const topHesKdv   = p(fatKdv + gelirKdv);
   const topIndKdv   = p(giderKdv);
   const odenecekKdv = p(topHesKdv - topIndKdv);
-  const calAlacak   = p(calisanOdemeler.filter(o=>o.tur==='alacak').reduce((s,o)=>s+o.tutar,0));
-  const calOdeme    = p(calisanOdemeler.filter(o=>o.tur==='odeme').reduce((s,o)=>s+o.tutar,0));
+  const calAlacak   = p(calFiltre.filter(o=>o.tur==='alacak').reduce((s,o)=>s+o.tutar,0));
+  const calOdeme    = p(calFiltre.filter(o=>o.tur==='odeme').reduce((s,o)=>s+o.tutar,0));
 
   // ── SEKME 1: OZET ──
   const ws1 = XLSX.utils.aoa_to_sheet([
     ['SMA MUHENDISLIK - MALI OZET RAPORU', ''],
-    ['Rapor Tarihi:', tarihStr],
+    ['Dönem:', ayAd],
+    ['Rapor Tarihi:', now.toLocaleDateString('tr-TR')],
     ['', ''],
     ['================================', ''],
-    ['FATURA TAKIBI', ''],
+    ['FATURA TAKİBİ', ''],
     ['--------------------------------', ''],
-    ['Toplam Alacak', fatToplam],
     ['  Tahsil Edilen', fatOdendi],
     ['  Bekleyen', fatBekliyor],
     ['  Gecikmiş', fatGecikti],
@@ -2179,27 +2287,27 @@ function muhasebeExcelIndir() {
     ['', ''],
     ['GELİR FİŞLERİ', ''],
     ['--------------------------------', ''],
-    ['  Gelir Matrah (KDV Haric)', gelirMatrah],
+    ['  Gelir Matrah (KDV Hariç)', gelirMatrah],
     ['  Gelir KDV', gelirKdv],
     ['  Gelir Toplam (KDV Dahil)', gelirToplam],
     ['', ''],
     ['GİDER FİŞLERİ', ''],
     ['--------------------------------', ''],
-    ['  Gider Matrah (KDV Haric)', giderMatrah],
-    ['  Indirilebilecek KDV', giderKdv],
+    ['  Gider Matrah (KDV Hariç)', giderMatrah],
+    ['  İndirilebilecek KDV', giderKdv],
     ['  Gider Toplam (KDV Dahil)', giderToplam],
     ['', ''],
     ['KDV HESABI', ''],
     ['--------------------------------', ''],
     ['  Hesaplanan KDV', topHesKdv],
-    ['  Indirilecek KDV', topIndKdv],
-    [odenecekKdv >= 0 ? '>>> ODENECEK KDV <<<' : '>>> KDV İADESİ <<<', Math.abs(odenecekKdv)],
+    ['  İndirilecek KDV', topIndKdv],
+    [odenecekKdv >= 0 ? '>>> ÖDENECEK KDV <<<' : '>>> KDV İADESİ <<<', Math.abs(odenecekKdv)],
     ['', ''],
-    ['CALISANLAR', ''],
+    ['ÇALIŞANLAR', ''],
     ['--------------------------------', ''],
-    ['  Calisan Alacagi', calAlacak],
-    ['  Calisan Odemesi', calOdeme],
-    ['  Net Calisan Bakiyesi', p(calAlacak - calOdeme)],
+    ['  Çalışan Alacağı', calAlacak],
+    ['  Çalışan Ödemesi', calOdeme],
+    ['  Net Çalışan Bakiyesi', p(calAlacak - calOdeme)],
     ['================================', ''],
   ]);
   ws1['!cols'] = [{wch:40}, {wch:20}];
@@ -2208,23 +2316,15 @@ function muhasebeExcelIndir() {
   // ── SEKME 2: FATURALAR ──
   const fatVeri = [
     ['MÜŞTERİ', 'HİZMET', 'MATRAH (TL)', 'KDV%', 'KDV (TL)', 'TOPLAM (TL)', 'FATURA TARİHİ', 'VADE TARİHİ', 'DURUM', 'NOT'],
-    ...faturalar.sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||'')).map(f=>[
-      f.musteriAd||'',
-      f.hizmet||'',
-      p(f.tutar),
-      20,
-      p(f.tutar*0.20),
-      p(f.tutar*1.20),
-      tf(f.tarih),
-      tf(f.vade),
-      df(f.durum),
-      f.not||''
+    ...fatFiltre.sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||'')).map(f=>[
+      f.musteriAd||'', f.hizmet||'', p(f.tutar), 20,
+      p(f.tutar*0.20), p(f.tutar*1.20), tf(f.tarih), tf(f.vade), df(f.durum), f.not||''
     ]),
     [''],
     ['--- TOPLAM ---', '',
-      p(faturalar.reduce((s,f)=>s+f.tutar,0)), '',
-      p(faturalar.reduce((s,f)=>s+(f.tutar*0.20),0)),
-      p(faturalar.reduce((s,f)=>s+(f.tutar*1.20),0)),
+      p(fatFiltre.reduce((s,f)=>s+f.tutar,0)), '',
+      p(fatFiltre.reduce((s,f)=>s+(f.tutar*0.20),0)),
+      p(fatFiltre.reduce((s,f)=>s+(f.tutar*1.20),0)),
       '', '', '', ''
     ]
   ];
@@ -2268,17 +2368,11 @@ function muhasebeExcelIndir() {
 
   // ── SEKME 5: ÇALIŞANLAR ──
   const calVeri = [
-    ['CALISAN', 'ISLEM TURU', 'TARİH', 'TUTAR (TL)', 'YONTEM', 'FATURALI', 'KDV (TL)', 'FATURA NO', 'ACIKLAMA'],
-    ...calisanOdemeler.sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||'')).map(o=>[
-      o.calisanAd||'',
-      o.tur==='alacak'?'Alacak':'Odeme',
-      tf(o.tarih),
-      p(o.tutar),
-      o.yontem==='nakit'?'Nakit':'Havale',
-      o.faturali?'Evet':'Hayir',
-      p(o.kdv||0),
-      o.faturaNo||'',
-      o.aciklama||''
+    ['ÇALIŞAN', 'İŞLEM TÜRÜ', 'TARİH', 'TUTAR (TL)', 'YÖNTEM', 'FATURALI', 'KDV (TL)', 'FATURA NO', 'AÇIKLAMA'],
+    ...calFiltre.sort((a,b)=>(a.tarih||'').localeCompare(b.tarih||'')).map(o=>[
+      o.calisanAd||'', o.tur==='alacak'?'Alacak':'Odeme', tf(o.tarih),
+      p(o.tutar), o.yontem==='nakit'?'Nakit':'Havale',
+      o.faturali?'Evet':'Hayir', p(o.kdv||0), o.faturaNo||'', o.aciklama||''
     ]),
     [''],
     ['--- TOPLAM ---', '', '', p(calAlacak), '', '', '', '', '']
@@ -2287,8 +2381,8 @@ function muhasebeExcelIndir() {
   ws5['!cols'] = [{wch:18},{wch:12},{wch:13},{wch:14},{wch:10},{wch:10},{wch:12},{wch:14},{wch:25}];
   XLSX.utils.book_append_sheet(wb, ws5, 'Calisanlar');
 
-  XLSX.writeFile(wb, `SMA_Muhasebe_${now.getFullYear()}_${ay}.xlsx`);
-  showToast('✅ Muhasebe Excel indirildi!');
+  XLSX.writeFile(wb, `SMA_Muhasebe_${dosyaAySuffix}.xlsx`);
+  showToast(`✅ ${ayAd} muhasebe Excel indirildi!`);
 }
 function buildExcel(){
   const wb=XLSX.utils.book_new();
